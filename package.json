@@ -1,0 +1,29 @@
+{
+  "name": "camino-imports-spreadsheets-jorf",
+  "version": "0.1.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "titres-h": "node ./titres/h-run.js",
+    "titres-h-w": "onchange '**/*.js' -i -- npm run titres-h",
+    "build": "npm run titres-h"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "chalk": "^2.4.1",
+    "dotenv": "^6.0.0",
+    "google-spreadsheet-to-json": "^1.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^5.3.0",
+    "eslint-config-prettier": "^2.9.0",
+    "eslint-config-standard": "^12.0.0-alpha.0",
+    "eslint-plugin-compat": "^2.5.1",
+    "eslint-plugin-import": "^2.13.0",
+    "eslint-plugin-node": "^7.0.1",
+    "eslint-plugin-promise": "^3.8.0",
+    "eslint-plugin-standard": "^3.1.0",
+    "onchange": "^4.1.0"
+  }
+}
