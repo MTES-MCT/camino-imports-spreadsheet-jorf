@@ -4,7 +4,7 @@ const type = 'h'
 const dbSpreadsheetId = '1Jn-iWWY12MSY2ypFILIBtqgZGS4gAECyHbkUxxH_O0Y'
 const jorfSpreadsheetId = '1h_tqp4i9hByh1KtdFmAsGephlH8Sg4phpoKbm2T97XU'
 
-module.exports = () => {
-  // titresSpreadsheetToJson(dbSpreadsheetId, jorfSpreadsheetId, type);
+module.exports = async () => {
+  await titresSpreadsheetToJson(dbSpreadsheetId, jorfSpreadsheetId, type)
   compare(type)
 }

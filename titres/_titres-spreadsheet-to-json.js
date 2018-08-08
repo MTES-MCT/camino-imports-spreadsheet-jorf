@@ -21,15 +21,16 @@ const tables = [
   { name: '_verifications', cb: null }
 ]
 
-module.exports = (dbSpreadsheetId, jorfSpreadsheetId, type) => {
-  tables.forEach(t =>
-    spreadsheetToJson(
-      dbSpreadsheetId,
-      `titres_${type}${t.name}`,
-      `titres${t.name}`,
-      t.cb
+module.exports = async (dbSpreadsheetId, jorfSpreadsheetId, type) => {
+  await Promise.all([
+    spreadsheetToJson(jorfSpreadsheetId, `titres_${type}-jorf`, `${type}`),
+    ...tables.map(t =>
+      spreadsheetToJson(
+        dbSpreadsheetId,
+        `titres_${type}${t.name}`,
+        `titres${t.name}`,
+        t.cb
+      )
     )
-  )
-
-  spreadsheetToJson(jorfSpreadsheetId, `titres_${type}-jorf`, `${type}`)
+  ])
 }
