@@ -5,6 +5,7 @@ const path = require('path')
 
 module.exports = async (spreadsheetId, fileName, worksheet, cb) => {
   try {
+    console.log(`Spreadsheet: ${fileName}`)
     let json = await spreadSheetToJson({
       spreadsheetId,
       credentials,
