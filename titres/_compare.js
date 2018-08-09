@@ -44,10 +44,20 @@ const titreDemarcheOctroiFind = (titre, jorfTitres) =>
 //   titre
 // )
 
+const refExists = (refSource, refJorf) => {
+  const f = refSource.slice(0, 1)
+  const ref =
+    f === 'D' || f === 'E' || f === 'M' || f === 'N' || f === 'P'
+      ? refSource.slice(1)
+      : refSource
+
+  return ref === refJorf
+}
+
 const compare = domaineId => {
   const jorfTitres = require(`../sources/titres-${domaineId}-jorf.json`)
 
-  const exports = {
+  const sources = {
     titres: require(`../sources/titres-${domaineId}.json`),
     titresDemarches: require(`../sources/titres-${domaineId}-demarches.json`),
     titresEtapes: require(`../sources/titres-${domaineId}-etapes.json`),
@@ -60,16 +70,25 @@ const compare = domaineId => {
     // titresUtilisateurs: require(`../sources/titres-${domaineId}-utilisateurs.json`)
   }
 
-  jorfTitres.forEach(t => {
-    const titre =
-      exports.titres.find(ti => {
-        const ref =
-          ti.references.DGEC.slice(0, 1) === 'C'
-            ? ti.references.DGEC
-            : ti.references.DGEC.slice(1)
+  const exports = {
+    titres: [],
+    titresDemarches: []
+    // titresEtapes: [],
+    // titresSubstances: [],
+    // titresTitulaires: [],
+    // titresEmprises: [],
+    // titresVerifications: [],
+    // titresPoints: []
+    // titresAmodiataires: [],
+    // titresUtilisateurs: []
+  }
 
-        return ref === t['ref_dgec']
-      }) || {}
+  jorfTitres.forEach(t => {
+    const sourceTitre = sources.titres.find(source =>
+      refExists(source.references.DGEC, t['ref_dgec'])
+    )
+
+    const titre = {}
 
     const tOctroi = demarcheIsOctroi(t)
       ? t
@@ -80,6 +99,8 @@ const compare = domaineId => {
       : '0000'
 
     const dateYear = date.slice(0, 4)
+
+    const sourceTitreId = sourceTitre ? sourceTitre.id : null
     const titreId = slugify(
       `${domaineId}-${t['titres.type_id']}-${t['titres.nom']}-${dateYear}`
     )
@@ -88,43 +109,51 @@ const compare = domaineId => {
       `${domaineId}-${demarcheId}-${t['titres.nom']}-${dateYear}`
     )
 
-    const titreDemarche =
-      exports.titresDemarches.find(td => td.id === titreDemarcheId) || {}
+    const sourceTitreDemarche = sources.titresDemarches.find(
+      td =>
+        td.id === titreDemarcheId ||
+        (td.titre_id === sourceTitreId && td.demarche_id === demarcheId)
+    )
 
+    const titreDemarche = {}
+
+    if (t['titres.nom'] === 'Soufflenheim') {
+      console.log(chalk.red.bold(`${titreId}, ${sourceTitreId}`))
+    }
+
+    titre.id = titreId
     titre.nom = t['titres.nom']
-    titre.references = { DGEC: t['ref_dgec'] }
     titre.type_id = t['titres.type_id']
     titre.domaine_id = t['titres.domaine_id']
     titre.statut_id = 'ind'
+    titre.references = { DGEC: t['ref_dgec'] }
 
-    if (!titre.id) {
-      if (demarcheIsOctroi(t)) {
-        titre.id = titreId
-        exports.titres.push(titre)
-      }
+    if (demarcheIsOctroi(t)) {
+      exports.titres.push(titre)
     }
 
+    titreDemarche.id = titreDemarcheId
     titreDemarche.demarche_id = demarcheId
     titreDemarche.titre_id = titreId
     titreDemarche.demarche_statut_id = 'ind'
     titreDemarche.ordre = 0
 
-    if (!titreDemarche.id) {
-      // console.log(chalk.red.bold(`${titreDemarcheId}`))
-      titreDemarche.id = titreDemarcheId
-      exports.titresDemarches.push(titreDemarche)
-    }
+    // console.log(chalk.red.bold(`${titreDemarcheId}`))
+
+    exports.titresDemarches.push(titreDemarche)
   })
 
-  exports.titres.forEach(t => {
-    const check = jorfTitres.find(ti => t.references.DGEC === ti['ref_dgec'])
+  sources.titres.forEach(t => {
+    const check = jorfTitres.find(ti =>
+      refExists(t.references.DGEC, ti['ref_dgec'])
+    )
     if (!check) {
       console.log(t.nom)
     }
   })
 
   Object.keys(exports).forEach(e => {
-    const json2csvParser = new Json2csvParser()
+    const json2csvParser = new Json2csvParser({ quote: '' })
     const csvFileName = `exports/${domaineId}-${decamelize(e, '-')}.csv`
     const csvFileContent = json2csvParser.parse(exports[e])
     fileCreate(csvFileName, csvFileContent)
