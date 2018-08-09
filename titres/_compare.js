@@ -28,20 +28,21 @@ const demarcheIsOctroi = titre =>
 
 // trouve la démarche d'octroi correspondant à une démarche
 const titreDemarcheOctroiFind = (titre, jorfTitres) =>
-  // soit la démarche d'octroi existe
+  // soit la démarche d'octroi avec la même ref existe
   jorfTitres.find(
     t => t['ref_dgec'] === titre['ref_dgec'] && demarcheIsOctroi(t)
-  ) ||
-  // soit on retourne la plus vieille démarche
-  jorfTitres.reduce(
-    (acc, t) =>
-      t['ref_dgec'] === titre['ref_dgec'] &&
-      dateYearCalc(acc['dpu:titres_etapes.date']) >
-        dateYearCalc(t['dpu:titres_etapes.date'])
-        ? t
-        : acc,
-    titre
   )
+// soit on retourne la plus vieille démarche avec la même ref
+// ||
+// jorfTitres.reduce(
+//   (acc, t) =>
+//     t['ref_dgec'] === titre['ref_dgec'] &&
+//     dateYearCalc(acc['dpu:titres_etapes.date']) >
+//       dateYearCalc(t['dpu:titres_etapes.date'])
+//       ? t
+//       : acc,
+//   titre
+// )
 
 const compare = domaineId => {
   const jorfTitres = require(`../sources/titres-${domaineId}-jorf.json`)
@@ -73,7 +74,11 @@ const compare = domaineId => {
     const tOctroi = demarcheIsOctroi(t)
       ? t
       : titreDemarcheOctroiFind(t, jorfTitres)
-    const date = dateFormat(tOctroi['dpu:titres_etapes.date'])
+
+    const date = tOctroi
+      ? dateFormat(tOctroi['dpu:titres_etapes.date'])
+      : '0000'
+
     const dateYear = date.slice(0, 4)
     const titreId = slugify(
       `${domaineId}-${t['titres.type_id']}-${t['titres.nom']}-${dateYear}`
@@ -96,10 +101,6 @@ const compare = domaineId => {
       if (demarcheIsOctroi(t)) {
         titre.id = titreId
         exports.titres.push(titre)
-      }
-    } else {
-      if (titreId !== titre.id) {
-        console.log(chalk.red.bold(`${titreId}, ${titre.id}`))
       }
     }
 
