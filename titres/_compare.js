@@ -84,11 +84,8 @@ const compare = domaineId => {
   }
 
   jorfTitres.forEach(t => {
-    const sourceTitre = sources.titres.find(source =>
-      refExists(source.references.DGEC, t['ref_dgec'])
-    )
-
     const titre = {}
+    const titreDemarche = {}
 
     const tOctroi = demarcheIsOctroi(t)
       ? t
@@ -99,8 +96,6 @@ const compare = domaineId => {
       : '0000'
 
     const dateYear = date.slice(0, 4)
-
-    const sourceTitreId = sourceTitre ? sourceTitre.id : null
     const titreId = slugify(
       `${domaineId}-${t['titres.type_id']}-${t['titres.nom']}-${dateYear}`
     )
@@ -109,13 +104,15 @@ const compare = domaineId => {
       `${domaineId}-${demarcheId}-${t['titres.nom']}-${dateYear}`
     )
 
+    const sourceTitre = sources.titres.find(source =>
+      refExists(source.references.DGEC, t['ref_dgec'])
+    )
+    const sourceTitreId = sourceTitre ? sourceTitre.id : null
     const sourceTitreDemarche = sources.titresDemarches.find(
       td =>
         td.id === titreDemarcheId ||
         (td.titre_id === sourceTitreId && td.demarche_id === demarcheId)
     )
-
-    const titreDemarche = {}
 
     if (t['titres.nom'] === 'Soufflenheim') {
       console.log(chalk.red.bold(`${titreId}, ${sourceTitreId}`))
