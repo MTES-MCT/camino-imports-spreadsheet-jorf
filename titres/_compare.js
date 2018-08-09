@@ -54,6 +54,27 @@ const refExists = (refSource, refJorf) => {
   return ref === refJorf
 }
 
+const logTitresWithNoSource = []
+const logTitresWithASource = []
+
+const log = () => {
+  console.log(
+    chalk.red.bold(
+      `${logTitresWithNoSource
+        .filter((elem, pos, arr) => arr.indexOf(elem) == pos)
+        .join('\n')}`
+    )
+  )
+
+  console.log(
+    chalk.green.bold(
+      `${logTitresWithASource
+        .filter((elem, pos, arr) => arr.indexOf(elem) == pos)
+        .join('\n')}`
+    )
+  )
+}
+
 const compare = domaineId => {
   const jorfTitres = require(`../sources/titres-${domaineId}-jorf.json`)
 
@@ -65,15 +86,15 @@ const compare = domaineId => {
     titresTitulaires: require(`../sources/titres-${domaineId}-titulaires.json`),
     titresEmprises: require(`../sources/titres-${domaineId}-emprises.json`),
     titresVerifications: require(`../sources/titres-${domaineId}-verifications.json`),
-    titresPoints: require(`../sources/titres-${domaineId}-points.json`)
-    // titresAmodiataires: require(`../sources/titres-${domaineId}-amodiataires.json`),
-    // titresUtilisateurs: require(`../sources/titres-${domaineId}-utilisateurs.json`)
+    titresPoints: require(`../sources/titres-${domaineId}-points.json`),
+    titresAmodiataires: require(`../sources/titres-${domaineId}-amodiataires.json`),
+    titresUtilisateurs: require(`../sources/titres-${domaineId}-utilisateurs.json`)
   }
 
   const exports = {
     titres: [],
-    titresDemarches: []
-    // titresEtapes: [],
+    titresDemarches: [],
+    titresEtapes: []
     // titresSubstances: [],
     // titresTitulaires: [],
     // titresEmprises: [],
@@ -86,6 +107,7 @@ const compare = domaineId => {
   jorfTitres.forEach(t => {
     const titre = {}
     const titreDemarche = {}
+    const titreDemarcheEtapes = []
 
     const tOctroi = demarcheIsOctroi(t)
       ? t
@@ -107,16 +129,12 @@ const compare = domaineId => {
     const sourceTitre = sources.titres.find(source =>
       refExists(source.references.DGEC, t['ref_dgec'])
     )
-    const sourceTitreId = sourceTitre ? sourceTitre.id : null
-    const sourceTitreDemarche = sources.titresDemarches.find(
-      td =>
-        td.id === titreDemarcheId ||
-        (td.titre_id === sourceTitreId && td.demarche_id === demarcheId)
-    )
 
-    if (t['titres.nom'] === 'Soufflenheim') {
-      console.log(chalk.red.bold(`${titreId}, ${sourceTitreId}`))
-    }
+    const sourceTitreDemarche = sourceTitre
+      ? sources.titresDemarches.find(
+          td => td.titre_id === sourceTitre.id && td.demarche_id === demarcheId
+        )
+      : null
 
     titre.id = titreId
     titre.nom = t['titres.nom']
@@ -124,20 +142,32 @@ const compare = domaineId => {
     titre.domaine_id = t['titres.domaine_id']
     titre.statut_id = 'ind'
     titre.references = { DGEC: t['ref_dgec'] }
-
-    if (demarcheIsOctroi(t)) {
-      exports.titres.push(titre)
-    }
-
     titreDemarche.id = titreDemarcheId
     titreDemarche.demarche_id = demarcheId
     titreDemarche.titre_id = titreId
     titreDemarche.demarche_statut_id = 'ind'
     titreDemarche.ordre = 0
 
-    // console.log(chalk.red.bold(`${titreDemarcheId}`))
+    if (t['dpu:titres_etapes.date']) {
+      titreDemarcheEtapes.push({
+        id: `${titreDemarcheId}-dpu`,
+        date: dateFormat(t['dpu:titres_etapes.date'])
+      })
+    }
 
+    if (!sourceTitre) {
+      logTitresWithNoSource.push(titreId)
+    } else {
+      logTitresWithASource.push(titreId)
+    }
+
+    if (demarcheIsOctroi(t)) {
+      exports.titres.push(titre)
+    }
     exports.titresDemarches.push(titreDemarche)
+    titreDemarcheEtapes.forEach(e => {
+      exports.titresEtapes.push(e)
+    })
   })
 
   sources.titres.forEach(t => {
@@ -155,6 +185,8 @@ const compare = domaineId => {
     const csvFileContent = json2csvParser.parse(exports[e])
     fileCreate(csvFileName, csvFileContent)
   })
+
+  // log()
 }
 
 module.exports = compare
