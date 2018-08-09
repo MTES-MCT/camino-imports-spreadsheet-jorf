@@ -2,18 +2,24 @@ const chalk = require('chalk')
 const fileCreate = require('../_utils/file-create')
 const Json2csvParser = require('json2csv').Parser
 const decamelize = require('decamelize')
+const slugify = require('@sindresorhus/slugify')
 
-const titreIdFind = (jorfTitre, titres) => {
-  const ref = jorfTitre['ref_dgec']
-  const t = titres.find(t => t.references.DGEC === ref)
-  if (t) {
-    return t.id
-  } else {
-    console.log(chalk.red.bold(`${ref}`))
-  }
+const dateReverse = input => {
+  const arr = input
+    .split('/')
+    .map(i => i.padStart(2, '0'))
+    .reverse()
+
+  const tmp = arr[1]
+  arr[1] = arr[2]
+  arr[2] = tmp
+
+  return arr.join('-')
 }
 
 const compare = domaineId => {
+  const jorfTitres = require(`../sources/titres-${domaineId}-jorf.json`)
+
   const exports = {
     titres: require(`../sources/titres-${domaineId}.json`),
     titresDemarches: require(`../sources/titres-${domaineId}-demarches.json`),
@@ -26,18 +32,35 @@ const compare = domaineId => {
     // titresAmodiataires: require(`../sources/titres-${domaineId}-amodiataires.json`),
     // titresUtilisateurs: require(`../sources/titres-${domaineId}-utilisateurs.json`)
   }
-  const jorfTitres = require(`../sources/titres-${domaineId}-jorf.json`)
-  // jorfTitres.forEach(t => {
-  //   const titreId = titreIdFind(t, exports.titres)
-  //   console.log(titreId)
-  //   if (!titreId) {
-  //     //
-  //   }
-  //   const titre = {
-  //     id: titreId,
-  //     nom: t['titres.nom']
-  //   }
-  // })
+
+  jorfTitres.forEach(t => {
+    const titre =
+      exports.titres.find(ti => ti.references.DGEC === t['ref_dgec']) || {}
+    const date = dateReverse(t['dpu:titres_etapes.date'])
+    const dateYear = date.slice(0, 4)
+    const titreId = slugify(
+      `${domaineId}-${t['titres.type_id']}-${t['titres.nom']}-${dateYear}`
+    )
+
+    const demarcheIsOctroi =
+      t['titres_demarches.demarche_id'] === 'prh-oct' ||
+      t['titres_demarches.demarche_id'] === 'cxx-oct' ||
+      t['titres_demarches.demarche_id'] === 'pxh-oct'
+
+    titre.nom = t['titres.nom']
+    titre.references = { DGEC: t['ref_dgec'] }
+    titre.type_id = t['titres.type_id']
+    titre.domaine_id = t['titres.domaine_id']
+    titre.statut_id = 'ind'
+
+    if (!titre.id) {
+      if (demarcheIsOctroi) {
+        titre.id = titreId
+        exports.titres.push(titre)
+      }
+    }
+  })
+
   Object.keys(exports).forEach(e => {
     const json2csvParser = new Json2csvParser()
     const csvFileName = `exports/${domaineId}-${decamelize(e, '-')}.csv`
