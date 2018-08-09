@@ -4,7 +4,8 @@ const Json2csvParser = require('json2csv').Parser
 const decamelize = require('decamelize')
 const slugify = require('@sindresorhus/slugify')
 
-const dateReverse = input => {
+// M/D/YYY vers YYYY-MM-DD
+const dateFormat = input => {
   const arr = input
     .split('/')
     .map(i => i.padStart(2, '0'))
@@ -16,6 +17,31 @@ const dateReverse = input => {
 
   return arr.join('-')
 }
+
+// string M/D/YYY vers number YYYY
+const dateYearCalc = str => Number(dateFormat(str).slice(0, 4))
+
+const demarcheIsOctroi = titre =>
+  titre['titres_demarches.demarche_id'] === 'prh-oct' ||
+  titre['titres_demarches.demarche_id'] === 'cxx-oct' ||
+  titre['titres_demarches.demarche_id'] === 'pxh-oct'
+
+// trouve la démarche d'octroi correspondant à une démarche
+const titreDemarcheOctroiFind = (titre, jorfTitres) =>
+  // soit la démarche d'octroi existe
+  jorfTitres.find(
+    t => t['ref_dgec'] === titre['ref_dgec'] && demarcheIsOctroi(t)
+  ) ||
+  // soit on retourne la plus vieille démarche
+  jorfTitres.reduce(
+    (acc, t) =>
+      t['ref_dgec'] === titre['ref_dgec'] &&
+      dateYearCalc(acc['dpu:titres_etapes.date']) >
+        dateYearCalc(t['dpu:titres_etapes.date'])
+        ? t
+        : acc,
+    titre
+  )
 
 const compare = domaineId => {
   const jorfTitres = require(`../sources/titres-${domaineId}-jorf.json`)
@@ -35,17 +61,30 @@ const compare = domaineId => {
 
   jorfTitres.forEach(t => {
     const titre =
-      exports.titres.find(ti => ti.references.DGEC === t['ref_dgec']) || {}
-    const date = dateReverse(t['dpu:titres_etapes.date'])
+      exports.titres.find(ti => {
+        const ref =
+          ti.references.DGEC.slice(0, 1) === 'C'
+            ? ti.references.DGEC
+            : ti.references.DGEC.slice(1)
+
+        return ref === t['ref_dgec']
+      }) || {}
+
+    const tOctroi = demarcheIsOctroi(t)
+      ? t
+      : titreDemarcheOctroiFind(t, jorfTitres)
+    const date = dateFormat(tOctroi['dpu:titres_etapes.date'])
     const dateYear = date.slice(0, 4)
     const titreId = slugify(
       `${domaineId}-${t['titres.type_id']}-${t['titres.nom']}-${dateYear}`
     )
+    const demarcheId = t['titres_demarches.demarche_id']
+    const titreDemarcheId = slugify(
+      `${domaineId}-${demarcheId}-${t['titres.nom']}-${dateYear}`
+    )
 
-    const demarcheIsOctroi =
-      t['titres_demarches.demarche_id'] === 'prh-oct' ||
-      t['titres_demarches.demarche_id'] === 'cxx-oct' ||
-      t['titres_demarches.demarche_id'] === 'pxh-oct'
+    const titreDemarche =
+      exports.titresDemarches.find(td => td.id === titreDemarcheId) || {}
 
     titre.nom = t['titres.nom']
     titre.references = { DGEC: t['ref_dgec'] }
@@ -54,10 +93,32 @@ const compare = domaineId => {
     titre.statut_id = 'ind'
 
     if (!titre.id) {
-      if (demarcheIsOctroi) {
+      if (demarcheIsOctroi(t)) {
         titre.id = titreId
         exports.titres.push(titre)
       }
+    } else {
+      if (titreId !== titre.id) {
+        console.log(chalk.red.bold(`${titreId}, ${titre.id}`))
+      }
+    }
+
+    titreDemarche.demarche_id = demarcheId
+    titreDemarche.titre_id = titreId
+    titreDemarche.demarche_statut_id = 'ind'
+    titreDemarche.ordre = 0
+
+    if (!titreDemarche.id) {
+      // console.log(chalk.red.bold(`${titreDemarcheId}`))
+      titreDemarche.id = titreDemarcheId
+      exports.titresDemarches.push(titreDemarche)
+    }
+  })
+
+  exports.titres.forEach(t => {
+    const check = jorfTitres.find(ti => t.references.DGEC === ti['ref_dgec'])
+    if (!check) {
+      console.log(t.nom)
     }
   })
 
