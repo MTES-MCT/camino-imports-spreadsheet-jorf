@@ -44,41 +44,25 @@ const titreDemarcheOctroiFind = (jorfDemarche, jorfDemarches) =>
 //   jorfDemarche
 // )
 
-const etapesSort = (titreDemarcheId, jorfDemarche) => {
-  const etapes = []
-  if (jorfDemarche['dpu:titres_etapes.date']) {
-    etapes.push({
-      id: `${titreDemarcheId}-dpu`,
-      year: new Date(dateFormat(jorfDemarche['dpu:titres_etapes.date']))
-    })
-  }
-  if (jorfDemarche['dex:titres_etapes.date']) {
-    etapes.push({
-      id: `${titreDemarcheId}-dex`,
-      year: new Date(dateFormat(jorfDemarche['dex:titres_etapes.date']))
-    })
-  }
-  if (jorfDemarche['mfr:titres_etapes.date']) {
-    etapes.push({
-      id: `${titreDemarcheId}-mfr`,
-      year: new Date(dateFormat(jorfDemarche['mfr:titres_etapes.date']))
-    })
-  }
-  if (jorfDemarche['dim:titres_etapes.date']) {
-    etapes.push({
-      id: `${titreDemarcheId}-dim`,
-      year: new Date(dateFormat(jorfDemarche['dim:titres_etapes.date']))
-    })
-  }
-  if (jorfDemarche['apu:titres_etapes.date']) {
-    etapes.push({
-      id: `${titreDemarcheId}-apu`,
-      year: new Date(dateFormat(jorfDemarche['apu:titres_etapes.date']))
-    })
-  }
+const etapeIds = ['dpu', 'apu', 'dex', 'dim', 'mfr']
+const etapeProps = [
+  'duree',
+  'echeance',
+  'surface',
+  'volume',
+  'engagement',
+  'engagement_devise',
+  'visas'
+]
 
-  return etapes.sort((a, b) => Number(a.year) - Number(b.year))
-}
+const etapesSort = (titreDemarcheId, jorfDemarche) =>
+  etapeIds
+    .filter(etapeId => jorfDemarche[`${etapeId}:titres_etapes.date`])
+    .map(etapeId => ({
+      id: `${titreDemarcheId}-${etapeId}`,
+      year: new Date(dateFormat(jorfDemarche[`${etapeId}:titres_etapes.date`]))
+    }))
+    .sort((a, b) => Number(a.year) - Number(b.year))
 
 const refExists = (refSource, refJorf) => {
   const f = refSource.slice(0, 1)
@@ -135,7 +119,7 @@ const compare = async domaineId => {
     titresEtapes: [
       {
         id: 'test',
-        demarche_id: 'test',
+        titre_demarche_id: 'test',
         etape_id: 'test',
         etape_statut_id: 'test',
         ordre: 'test',
@@ -160,7 +144,6 @@ const compare = async domaineId => {
   jorfDemarches.forEach(jorfDemarche => {
     const titre = {}
     const titreDemarche = {}
-    const titreDemarcheEtapes = []
 
     const tOctroi = demarcheIsOctroi(jorfDemarche)
       ? jorfDemarche
@@ -211,78 +194,40 @@ const compare = async domaineId => {
       logTitresWithASource.push(titreId)
     }
 
-    if (jorfDemarche['dpu:titres_etapes.date']) {
-      const etapeId = `${titreDemarcheId}-dpu`
-      titreDemarcheEtapes.push({
-        id: etapeId,
-        titre_demarche_id: titreDemarcheId,
-        etape_id: 'dpu',
-        etape_statut_id:
-          jorfDemarche['dpu:dex:dim:titres_etapes.etape_statut_id'],
-        ordre: etapesSorted.findIndex(e => e.id === etapeId),
-        date: dateFormat(jorfDemarche['dpu:titres_etapes.date'])
+    const titreEtapes = etapeIds
+      .filter(etapeId => jorfDemarche[`${etapeId}:titres_etapes.date`])
+      .map(etapeId => {
+        const titreEtapeId = `${titreDemarcheId}-${etapeId}`
+        const etape = {
+          id: `${titreDemarcheId}-${etapeId}`,
+          titre_demarche_id: titreDemarcheId,
+          etape_id: etapeId,
+          etape_statut_id:
+            jorfDemarche[`${etapeId}:titres_etapes.etape_statut_id`],
+          ordre: etapesSorted.findIndex(e => e.id === titreEtapeId),
+          date: dateFormat(jorfDemarche[`${etapeId}:titres_etapes.date`])
+        }
+
+        etapeProps.forEach(prop => {
+          if (jorfDemarche[`${etapeId}:titres_etapes.${prop}`]) {
+            etape[prop] = jorfDemarche[`${etapeId}:titres_etapes.${prop}`]
+          }
+        })
+
+        if (etape.visas) {
+          etape.visas = etape.visas.split(';').map(l => l.replace(/\n/g, ''))
+        }
+
+        if (etape.echeance) {
+          etape.echeance = dateFormat(etape.echeance)
+        }
+
+        if (etape.surface) {
+          etape.surface = etape.surface.replace(/,/g, '.')
+        }
+
+        return etape
       })
-    }
-
-    if (jorfDemarche['dex:titres_etapes.date']) {
-      const etapeId = `${titreDemarcheId}-dex`
-      const tde = {
-        id: etapeId,
-        titre_demarche_id: titreDemarcheId,
-        etape_id: 'dex',
-        etape_statut_id:
-          jorfDemarche['dpu:dex:dim:titres_etapes.etape_statut_id'],
-        ordre: etapesSorted.findIndex(e => e.id === etapeId),
-        date: dateFormat(jorfDemarche['dex:titres_etapes.date'])
-      }
-
-      if (jorfDemarche['dex:titres_etapes.duree']) {
-        tde.duree = jorfDemarche['dex:titres_etapes.duree']
-      }
-
-      if (jorfDemarche['dex:dim:titres_etapes.echeance']) {
-        tde.echeance = dateFormat(
-          jorfDemarche['dex:dim:titres_etapes.echeance']
-        )
-      }
-
-      if (jorfDemarche['dex:titres_etapes.surface']) {
-        tde.surface = jorfDemarche['dex:titres_etapes.surface']
-      }
-
-      if (jorfDemarche['dex:titres_etapes.volume']) {
-        tde.volume = jorfDemarche['dex:titres_etapes.volume']
-      }
-
-      if (jorfDemarche['dex:titres_etapes.engagement']) {
-        tde.engagement = jorfDemarche['dex:titres_etapes.engagement']
-      }
-
-      if (jorfDemarche['dex:titres_etapes.engagement_devise']) {
-        tde.engagement_devise =
-          jorfDemarche['dex:titres_etapes.engagement_devise']
-      }
-
-      if (jorfDemarche['dex:titres_etapes.visas']) {
-        tde.visas = jorfDemarche['dex:titres_etapes.visas']
-          .split(';')
-          .map(l => l.replace(/\n/g, ''))
-      }
-
-      titreDemarcheEtapes.push(tde)
-    }
-
-    if (jorfDemarche['mfr:titres_etapes.date']) {
-      const etapeId = `${titreDemarcheId}-mfr`
-      titreDemarcheEtapes.push({
-        id: etapeId,
-        titre_demarche_id: titreDemarcheId,
-        etape_id: 'mfr',
-        etape_statut_id: jorfDemarche['mfr:titres_etapes.etape_statut_id'],
-        ordre: etapesSorted.findIndex(e => e.id === etapeId),
-        date: dateFormat(jorfDemarche['mfr:titres_etapes.date'])
-      })
-    }
 
     //
     if (demarcheIsOctroi(jorfDemarche)) {
@@ -290,8 +235,8 @@ const compare = async domaineId => {
     }
 
     exports.titresDemarches.push(titreDemarche)
-    titreDemarcheEtapes.forEach(e => {
-      exports.titresEtapes.push(e)
+    titreEtapes.forEach(titreEtape => {
+      exports.titresEtapes.push(titreEtape)
     })
   })
 
