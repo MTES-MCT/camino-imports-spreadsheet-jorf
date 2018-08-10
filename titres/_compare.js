@@ -61,7 +61,7 @@ const log = () => {
   console.log(
     chalk.red.bold(
       `${logTitresWithNoSource
-        .filter((elem, pos, arr) => arr.indexOf(elem) == pos)
+        .filter((elem, pos, arr) => arr.indexOf(elem) === pos)
         .join('\n')}`
     )
   )
@@ -69,13 +69,13 @@ const log = () => {
   console.log(
     chalk.green.bold(
       `${logTitresWithASource
-        .filter((elem, pos, arr) => arr.indexOf(elem) == pos)
+        .filter((elem, pos, arr) => arr.indexOf(elem) === pos)
         .join('\n')}`
     )
   )
 }
 
-const compare = domaineId => {
+const compare = async domaineId => {
   const jorfTitres = require(`../sources/titres-${domaineId}-jorf.json`)
 
   const sources = {
@@ -148,17 +148,56 @@ const compare = domaineId => {
     titreDemarche.demarche_statut_id = 'ind'
     titreDemarche.ordre = 0
 
-    if (t['dpu:titres_etapes.date']) {
-      titreDemarcheEtapes.push({
-        id: `${titreDemarcheId}-dpu`,
-        date: dateFormat(t['dpu:titres_etapes.date'])
-      })
-    }
-
     if (!sourceTitre) {
       logTitresWithNoSource.push(titreId)
     } else {
       logTitresWithASource.push(titreId)
+    }
+
+    if (t['dpu:titres_etapes.date']) {
+      titreDemarcheEtapes.push({
+        id: `${titreDemarcheId}-dpu`,
+        demarche_id: demarcheId,
+        etape_id: 'dpu',
+        etape_statut_id: t['dpu:dex:dim:titres_etapes.etape_statut_id'],
+        date: dateFormat(t['dpu:titres_etapes.date'])
+      })
+    }
+
+    if (t['dex:titres_etapes.date']) {
+      const tde = {
+        id: `${titreDemarcheId}-dex`,
+        demarche_id: demarcheId,
+        etape_id: 'dex',
+        etape_statut_id: t['dpu:dex:dim:titres_etapes.etape_statut_id'],
+        date: dateFormat(t['dex:titres_etapes.date'])
+      }
+
+      if (t['dex:titres_etapes.duree']) {
+        tde.duree = t['dex:titres_etapes.duree']
+      }
+
+      if (t['dex:dim:titres_etapes.echeance']) {
+        tde.echeance = t['dex:dim:titres_etapes.echeance']
+      }
+
+      if (t['dex:titres_etapes.surface']) {
+        tde.surface = t['dex:titres_etapes.surface']
+      }
+
+      if (t['dex:titres_etapes.volume_extrait_autorise']) {
+        tde.surface = t['dex:titres_etapes.volume_extrait_autorise']
+      }
+
+      if (t['dex:titres_etapes.engagement_financier']) {
+        tde.surface = t['dex:titres_etapes.engagement_financier']
+      }
+
+      if (t['dex:titres_etapes.engagement_financier_devise']) {
+        tde.surface = t['dex:titres_etapes.engagement_financier_devise']
+      }
+
+      titreDemarcheEtapes.push(tde)
     }
 
     if (demarcheIsOctroi(t)) {
@@ -179,12 +218,14 @@ const compare = domaineId => {
     }
   })
 
-  Object.keys(exports).forEach(e => {
-    const json2csvParser = new Json2csvParser({ quote: '' })
-    const csvFileName = `exports/${domaineId}-${decamelize(e, '-')}.csv`
-    const csvFileContent = json2csvParser.parse(exports[e])
-    fileCreate(csvFileName, csvFileContent)
-  })
+  await Promise.all([
+    ...Object.keys(exports).map(async e => {
+      const json2csvParser = new Json2csvParser({ quote: '' })
+      const csvFileName = `exports/${domaineId}-${decamelize(e, '-')}.csv`
+      const csvFileContent = json2csvParser.parse(exports[e])
+      await fileCreate(csvFileName, csvFileContent)
+    })
+  ])
 
   // log()
 }
