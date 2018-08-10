@@ -27,22 +27,58 @@ const demarcheIsOctroi = titre =>
   titre['titres_demarches.demarche_id'] === 'pxh-oct'
 
 // trouve la démarche d'octroi correspondant à une démarche
-const titreDemarcheOctroiFind = (titre, jorfTitres) =>
+const titreDemarcheOctroiFind = (jorfDemarche, jorfDemarches) =>
   // soit la démarche d'octroi avec la même ref existe
-  jorfTitres.find(
-    t => t['ref_dgec'] === titre['ref_dgec'] && demarcheIsOctroi(t)
+  jorfDemarches.find(
+    d => d['ref_dgec'] === jorfDemarche['ref_dgec'] && demarcheIsOctroi(d)
   )
 // soit on retourne la plus vieille démarche avec la même ref
 // ||
-// jorfTitres.reduce(
-//   (acc, t) =>
-//     t['ref_dgec'] === titre['ref_dgec'] &&
-//     dateYearCalc(acc['dpu:titres_etapes.date']) >
-//       dateYearCalc(t['dpu:titres_etapes.date'])
-//       ? t
-//       : acc,
-//   titre
+// jorfDemarches.reduce(
+//   (demarcheOlder, d) =>
+//     d['ref_dgec'] === jorfDemarche['ref_dgec'] &&
+//     dateYearCalc(demarcheOlder['dpu:titres_etapes.date']) >
+//       dateYearCalc(d['dpu:titres_etapes.date'])
+//       ? d
+//       : demarcheOlder,
+//   jorfDemarche
 // )
+
+const etapesSort = (titreDemarcheId, jorfDemarche) => {
+  const etapes = []
+  if (jorfDemarche['dpu:titres_etapes.date']) {
+    etapes.push({
+      id: `${titreDemarcheId}-dpu`,
+      year: new Date(dateFormat(jorfDemarche['dpu:titres_etapes.date']))
+    })
+  }
+  if (jorfDemarche['dex:titres_etapes.date']) {
+    etapes.push({
+      id: `${titreDemarcheId}-dex`,
+      year: new Date(dateFormat(jorfDemarche['dex:titres_etapes.date']))
+    })
+  }
+  if (jorfDemarche['mfr:titres_etapes.date']) {
+    etapes.push({
+      id: `${titreDemarcheId}-mfr`,
+      year: new Date(dateFormat(jorfDemarche['mfr:titres_etapes.date']))
+    })
+  }
+  if (jorfDemarche['dim:titres_etapes.date']) {
+    etapes.push({
+      id: `${titreDemarcheId}-dim`,
+      year: new Date(dateFormat(jorfDemarche['dim:titres_etapes.date']))
+    })
+  }
+  if (jorfDemarche['apu:titres_etapes.date']) {
+    etapes.push({
+      id: `${titreDemarcheId}-apu`,
+      year: new Date(dateFormat(jorfDemarche['apu:titres_etapes.date']))
+    })
+  }
+
+  return etapes.sort((a, b) => Number(a.year) - Number(b.year))
+}
 
 const refExists = (refSource, refJorf) => {
   const f = refSource.slice(0, 1)
@@ -56,27 +92,29 @@ const refExists = (refSource, refJorf) => {
 
 const logTitresWithNoSource = []
 const logTitresWithASource = []
+const logInvalidDates = []
 
 const log = () => {
-  console.log(
-    chalk.red.bold(
-      `${logTitresWithNoSource
-        .filter((elem, pos, arr) => arr.indexOf(elem) === pos)
-        .join('\n')}`
-    )
-  )
+  // console.log(
+  //   chalk.red.bold(
+  //     `${logTitresWithNoSource
+  //       .filter((elem, pos, arr) => arr.indexOf(elem) === pos)
+  //       .join('\n')}`
+  //   )
+  // )
 
-  console.log(
-    chalk.green.bold(
-      `${logTitresWithASource
-        .filter((elem, pos, arr) => arr.indexOf(elem) === pos)
-        .join('\n')}`
-    )
-  )
+  // console.log(
+  //   chalk.green.bold(
+  //     `${logTitresWithASource
+  //       .filter((elem, pos, arr) => arr.indexOf(elem) === pos)
+  //       .join('\n')}`
+  //   )
+  // )
+  console.log(logInvalidDates)
 }
 
 const compare = async domaineId => {
-  const jorfTitres = require(`../sources/titres-${domaineId}-jorf.json`)
+  const jorfDemarches = require(`../sources/titres-${domaineId}-jorf.json`)
 
   const sources = {
     titres: require(`../sources/titres-${domaineId}.json`),
@@ -119,14 +157,14 @@ const compare = async domaineId => {
     // titresUtilisateurs: []
   }
 
-  jorfTitres.forEach(t => {
+  jorfDemarches.forEach(jorfDemarche => {
     const titre = {}
     const titreDemarche = {}
     const titreDemarcheEtapes = []
 
-    const tOctroi = demarcheIsOctroi(t)
-      ? t
-      : titreDemarcheOctroiFind(t, jorfTitres)
+    const tOctroi = demarcheIsOctroi(jorfDemarche)
+      ? jorfDemarche
+      : titreDemarcheOctroiFind(jorfDemarche, jorfDemarches)
 
     const date = tOctroi
       ? dateFormat(tOctroi['dpu:titres_etapes.date'])
@@ -134,15 +172,19 @@ const compare = async domaineId => {
 
     const dateYear = date.slice(0, 4)
     const titreId = slugify(
-      `${domaineId}-${t['titres.type_id']}-${t['titres.nom']}-${dateYear}`
+      `${domaineId}-${jorfDemarche['titres.type_id']}-${
+        jorfDemarche['titres.nom']
+      }-${dateYear}`
     )
-    const demarcheId = t['titres_demarches.demarche_id']
+    const demarcheId = jorfDemarche['titres_demarches.demarche_id']
     const titreDemarcheId = slugify(
-      `${domaineId}-${demarcheId}-${t['titres.nom']}-${dateYear}`
+      `${domaineId}-${demarcheId}-${jorfDemarche['titres.nom']}-${dateYear}`
     )
 
+    const etapesSorted = etapesSort(titreDemarcheId, jorfDemarche)
+
     const sourceTitre = sources.titres.find(source =>
-      refExists(source.references.DGEC, t['ref_dgec'])
+      refExists(source.references.DGEC, jorfDemarche['ref_dgec'])
     )
 
     const sourceTitreDemarche = sourceTitre
@@ -152,11 +194,11 @@ const compare = async domaineId => {
       : null
 
     titre.id = titreId
-    titre.nom = t['titres.nom']
-    titre.type_id = t['titres.type_id']
-    titre.domaine_id = t['titres.domaine_id']
+    titre.nom = jorfDemarche['titres.nom']
+    titre.type_id = jorfDemarche['titres.type_id']
+    titre.domaine_id = jorfDemarche['titres.domaine_id']
     titre.statut_id = 'ind'
-    titre.references = { DGEC: t['ref_dgec'] }
+    titre.references = { DGEC: jorfDemarche['ref_dgec'] }
     titreDemarche.id = titreDemarcheId
     titreDemarche.demarche_id = demarcheId
     titreDemarche.titre_id = titreId
@@ -169,53 +211,60 @@ const compare = async domaineId => {
       logTitresWithASource.push(titreId)
     }
 
-    if (t['dpu:titres_etapes.date']) {
+    if (jorfDemarche['dpu:titres_etapes.date']) {
+      const etapeId = `${titreDemarcheId}-dpu`
       titreDemarcheEtapes.push({
-        id: `${titreDemarcheId}-dpu`,
+        id: etapeId,
         titre_demarche_id: titreDemarcheId,
         etape_id: 'dpu',
-        etape_statut_id: t['dpu:dex:dim:titres_etapes.etape_statut_id'],
-        ordre: 0,
-        date: dateFormat(t['dpu:titres_etapes.date'])
+        etape_statut_id:
+          jorfDemarche['dpu:dex:dim:titres_etapes.etape_statut_id'],
+        ordre: etapesSorted.findIndex(e => e.id === etapeId),
+        date: dateFormat(jorfDemarche['dpu:titres_etapes.date'])
       })
     }
 
-    if (t['dex:titres_etapes.date']) {
+    if (jorfDemarche['dex:titres_etapes.date']) {
+      const etapeId = `${titreDemarcheId}-dex`
       const tde = {
-        id: `${titreDemarcheId}-dex`,
+        id: etapeId,
         titre_demarche_id: titreDemarcheId,
         etape_id: 'dex',
-        etape_statut_id: t['dpu:dex:dim:titres_etapes.etape_statut_id'],
-        ordre: 0,
-        date: dateFormat(t['dex:titres_etapes.date'])
+        etape_statut_id:
+          jorfDemarche['dpu:dex:dim:titres_etapes.etape_statut_id'],
+        ordre: etapesSorted.findIndex(e => e.id === etapeId),
+        date: dateFormat(jorfDemarche['dex:titres_etapes.date'])
       }
 
-      if (t['dex:titres_etapes.duree']) {
-        tde.duree = t['dex:titres_etapes.duree']
+      if (jorfDemarche['dex:titres_etapes.duree']) {
+        tde.duree = jorfDemarche['dex:titres_etapes.duree']
       }
 
-      if (t['dex:dim:titres_etapes.echeance']) {
-        tde.echeance = dateFormat(t['dex:dim:titres_etapes.echeance'])
+      if (jorfDemarche['dex:dim:titres_etapes.echeance']) {
+        tde.echeance = dateFormat(
+          jorfDemarche['dex:dim:titres_etapes.echeance']
+        )
       }
 
-      if (t['dex:titres_etapes.surface']) {
-        tde.surface = t['dex:titres_etapes.surface']
+      if (jorfDemarche['dex:titres_etapes.surface']) {
+        tde.surface = jorfDemarche['dex:titres_etapes.surface']
       }
 
-      if (t['dex:titres_etapes.volume']) {
-        tde.volume = t['dex:titres_etapes.volume']
+      if (jorfDemarche['dex:titres_etapes.volume']) {
+        tde.volume = jorfDemarche['dex:titres_etapes.volume']
       }
 
-      if (t['dex:titres_etapes.engagement']) {
-        tde.engagement = t['dex:titres_etapes.engagement']
+      if (jorfDemarche['dex:titres_etapes.engagement']) {
+        tde.engagement = jorfDemarche['dex:titres_etapes.engagement']
       }
 
-      if (t['dex:titres_etapes.engagement_devise']) {
-        tde.engagement_devise = t['dex:titres_etapes.engagement_devise']
+      if (jorfDemarche['dex:titres_etapes.engagement_devise']) {
+        tde.engagement_devise =
+          jorfDemarche['dex:titres_etapes.engagement_devise']
       }
 
-      if (t['dex:titres_etapes.visas']) {
-        tde.visas = t['dex:titres_etapes.visas']
+      if (jorfDemarche['dex:titres_etapes.visas']) {
+        tde.visas = jorfDemarche['dex:titres_etapes.visas']
           .split(';')
           .map(l => l.replace(/\n/g, ''))
       }
@@ -223,19 +272,20 @@ const compare = async domaineId => {
       titreDemarcheEtapes.push(tde)
     }
 
-    if (t['mfr:titres_etapes.date']) {
+    if (jorfDemarche['mfr:titres_etapes.date']) {
+      const etapeId = `${titreDemarcheId}-mfr`
       titreDemarcheEtapes.push({
-        id: `${titreDemarcheId}-mfr`,
+        id: etapeId,
         titre_demarche_id: titreDemarcheId,
         etape_id: 'mfr',
-        etape_statut_id: t['mfr:titres_etapes.etape_statut_id'],
-        ordre: 0,
-        date: dateFormat(t['mfr:titres_etapes.date'])
+        etape_statut_id: jorfDemarche['mfr:titres_etapes.etape_statut_id'],
+        ordre: etapesSorted.findIndex(e => e.id === etapeId),
+        date: dateFormat(jorfDemarche['mfr:titres_etapes.date'])
       })
     }
 
     //
-    if (demarcheIsOctroi(t)) {
+    if (demarcheIsOctroi(jorfDemarche)) {
       exports.titres.push(titre)
     }
 
@@ -246,7 +296,7 @@ const compare = async domaineId => {
   })
 
   sources.titres.forEach(t => {
-    const check = jorfTitres.find(ti =>
+    const check = jorfDemarches.find(ti =>
       refExists(t.references.DGEC, ti['ref_dgec'])
     )
     if (!check) {
