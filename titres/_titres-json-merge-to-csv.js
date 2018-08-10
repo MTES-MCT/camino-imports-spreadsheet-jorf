@@ -94,7 +94,22 @@ const compare = async domaineId => {
   const exports = {
     titres: [],
     titresDemarches: [],
-    titresEtapes: []
+    titresEtapes: [
+      {
+        id: 'test',
+        demarche_id: 'test',
+        etape_id: 'test',
+        etape_statut_id: 'test',
+        ordre: 'test',
+        date: 'test',
+        duree: 'test',
+        echeance: 'test',
+        surface: 'test',
+        points: 'test',
+        substances: 'test',
+        titulaires: 'test'
+      }
+    ]
     // titresSubstances: [],
     // titresTitulaires: [],
     // titresEmprises: [],
@@ -157,9 +172,10 @@ const compare = async domaineId => {
     if (t['dpu:titres_etapes.date']) {
       titreDemarcheEtapes.push({
         id: `${titreDemarcheId}-dpu`,
-        demarche_id: demarcheId,
+        titre_demarche_id: titreDemarcheId,
         etape_id: 'dpu',
         etape_statut_id: t['dpu:dex:dim:titres_etapes.etape_statut_id'],
+        ordre: 0,
         date: dateFormat(t['dpu:titres_etapes.date'])
       })
     }
@@ -167,9 +183,10 @@ const compare = async domaineId => {
     if (t['dex:titres_etapes.date']) {
       const tde = {
         id: `${titreDemarcheId}-dex`,
-        demarche_id: demarcheId,
+        titre_demarche_id: titreDemarcheId,
         etape_id: 'dex',
         etape_statut_id: t['dpu:dex:dim:titres_etapes.etape_statut_id'],
+        ordre: 0,
         date: dateFormat(t['dex:titres_etapes.date'])
       }
 
@@ -178,31 +195,50 @@ const compare = async domaineId => {
       }
 
       if (t['dex:dim:titres_etapes.echeance']) {
-        tde.echeance = t['dex:dim:titres_etapes.echeance']
+        tde.echeance = dateFormat(t['dex:dim:titres_etapes.echeance'])
       }
 
       if (t['dex:titres_etapes.surface']) {
         tde.surface = t['dex:titres_etapes.surface']
       }
 
-      if (t['dex:titres_etapes.volume_extrait_autorise']) {
-        tde.surface = t['dex:titres_etapes.volume_extrait_autorise']
+      if (t['dex:titres_etapes.volume']) {
+        tde.volume = t['dex:titres_etapes.volume']
       }
 
-      if (t['dex:titres_etapes.engagement_financier']) {
-        tde.surface = t['dex:titres_etapes.engagement_financier']
+      if (t['dex:titres_etapes.engagement']) {
+        tde.engagement = t['dex:titres_etapes.engagement']
       }
 
-      if (t['dex:titres_etapes.engagement_financier_devise']) {
-        tde.surface = t['dex:titres_etapes.engagement_financier_devise']
+      if (t['dex:titres_etapes.engagement_devise']) {
+        tde.engagement_devise = t['dex:titres_etapes.engagement_devise']
+      }
+
+      if (t['dex:titres_etapes.visas']) {
+        tde.visas = t['dex:titres_etapes.visas']
+          .split(';')
+          .map(l => l.replace(/\n/g, ''))
       }
 
       titreDemarcheEtapes.push(tde)
     }
 
+    if (t['mfr:titres_etapes.date']) {
+      titreDemarcheEtapes.push({
+        id: `${titreDemarcheId}-mfr`,
+        titre_demarche_id: titreDemarcheId,
+        etape_id: 'mfr',
+        etape_statut_id: t['mfr:titres_etapes.etape_statut_id'],
+        ordre: 0,
+        date: dateFormat(t['mfr:titres_etapes.date'])
+      })
+    }
+
+    //
     if (demarcheIsOctroi(t)) {
       exports.titres.push(titre)
     }
+
     exports.titresDemarches.push(titreDemarche)
     titreDemarcheEtapes.forEach(e => {
       exports.titresEtapes.push(e)
@@ -220,7 +256,7 @@ const compare = async domaineId => {
 
   await Promise.all([
     ...Object.keys(exports).map(async e => {
-      const json2csvParser = new Json2csvParser({ quote: '' })
+      const json2csvParser = new Json2csvParser()
       const csvFileName = `exports/${domaineId}-${decamelize(e, '-')}.csv`
       const csvFileContent = json2csvParser.parse(exports[e])
       await fileCreate(csvFileName, csvFileContent)

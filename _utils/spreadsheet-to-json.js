@@ -1,6 +1,6 @@
 const spreadSheetToJson = require('google-spreadsheet-to-json')
-const credentials = require('./credentials.js')
-const fileCreate = require('./_utils/file-create')
+const credentials = require('../config/credentials')
+const fileCreate = require('./file-create')
 const path = require('path')
 
 module.exports = async (spreadsheetId, fileName, worksheet, cb) => {
@@ -19,7 +19,7 @@ module.exports = async (spreadsheetId, fileName, worksheet, cb) => {
     const fileContent = JSON.stringify(json, null, 2)
     const filePath = path.join(
       __dirname,
-      `sources/${fileName.replace(/_/g, '-')}.json`
+      `../sources/${fileName.replace(/_/g, '-')}.json`
     )
 
     await fileCreate(filePath, fileContent)
