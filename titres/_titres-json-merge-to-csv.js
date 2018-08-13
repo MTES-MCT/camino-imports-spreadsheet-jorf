@@ -76,7 +76,6 @@ const refExists = (refSource, refJorf) => {
 
 const logTitresWithNoSource = []
 const logTitresWithASource = []
-const logInvalidDates = []
 
 const log = () => {
   // console.log(
@@ -86,7 +85,6 @@ const log = () => {
   //       .join('\n')}`
   //   )
   // )
-
   // console.log(
   //   chalk.green.bold(
   //     `${logTitresWithASource
@@ -94,7 +92,6 @@ const log = () => {
   //       .join('\n')}`
   //   )
   // )
-  console.log(logInvalidDates)
 }
 
 const compare = async domaineId => {
@@ -131,12 +128,12 @@ const compare = async domaineId => {
         substances: 'test',
         titulaires: 'test'
       }
-    ]
+    ],
+    titresPoints: []
     // titresSubstances: [],
     // titresTitulaires: [],
     // titresEmprises: [],
     // titresVerifications: [],
-    // titresPoints: []
     // titresAmodiataires: [],
     // titresUtilisateurs: []
   }
@@ -166,13 +163,15 @@ const compare = async domaineId => {
 
     const etapesSorted = etapesSort(titreDemarcheId, jorfDemarche)
 
-    const sourceTitre = sources.titres.find(source =>
-      refExists(source.references.DGEC, jorfDemarche['ref_dgec'])
+    const sourceTitre = sources.titres.find(sourceTitre =>
+      refExists(sourceTitre.references.DGEC, jorfDemarche['ref_dgec'])
     )
 
     const sourceTitreDemarche = sourceTitre
       ? sources.titresDemarches.find(
-          td => td.titre_id === sourceTitre.id && td.demarche_id === demarcheId
+          titreDemarche =>
+            titreDemarche.titre_id === sourceTitre.id &&
+            titreDemarche.demarche_id === demarcheId
         )
       : null
 
@@ -229,7 +228,34 @@ const compare = async domaineId => {
         return etape
       })
 
-    //
+    const titreEtapesPoints = etapeIds
+      .map(etapeId => {
+        const sourceTitreEtape = sourceTitreDemarche
+          ? sources.titresEtapes.find(
+              titreEtape =>
+                titreEtape.titre_demarche_id === sourceTitreDemarche.id &&
+                titreEtape.etape_id === etapeId
+            )
+          : null
+
+        return sourceTitreEtape
+          ? sources.titresPoints
+              .filter(
+                titrePoint => titrePoint.titre_etape_id === sourceTitreEtape.id
+              )
+              .map(titrePoint => {
+                const titreEtapeId = `${titreDemarcheId}-${etapeId}`
+                titrePoint.titre_etape_id = titreEtapeId
+                titrePoint.id = titrePoint.id.replace(
+                  sourceTitreEtape.id,
+                  titreEtapeId
+                )
+                return titrePoint
+              })
+          : null
+      })
+      .filter(titreEtapePoints => titreEtapePoints)
+
     if (demarcheIsOctroi(jorfDemarche)) {
       exports.titres.push(titre)
     }
@@ -238,16 +264,29 @@ const compare = async domaineId => {
     titreEtapes.forEach(titreEtape => {
       exports.titresEtapes.push(titreEtape)
     })
+
+    titreEtapesPoints.forEach(titreEtapePoints => {
+      titreEtapePoints.forEach(titrePoint => {
+        exports.titresPoints.push(titrePoint)
+      })
+    })
   })
 
-  sources.titres.forEach(t => {
-    const check = jorfDemarches.find(ti =>
-      refExists(t.references.DGEC, ti['ref_dgec'])
-    )
-    if (!check) {
-      console.log(t.nom)
-    }
-  })
+  // sources.titres.forEach(t => {
+  //   const titre = jorfDemarches.find(ti =>
+  //     refExists(t.references.DGEC, ti['ref_dgec'])
+  //   )
+  //   if (!titre) {
+  //     console.log(chalk.red.bold(t.nom))
+  //   } else {
+  //     const demarche = sources.titresDemarches
+  //       .filter(d => d.titre_id === t.id)
+  //       .find(d => titre['titres_demarches.demarche_id'] === d.demarche_id)
+  //     if (!demarche) {
+  //       console.log('--> ', t.nom)
+  //     }
+  //   }
+  // })
 
   await Promise.all([
     ...Object.keys(exports).map(async e => {
