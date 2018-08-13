@@ -129,7 +129,8 @@ const compare = async domaineId => {
         titulaires: 'test'
       }
     ],
-    titresPoints: []
+    titresPoints: [],
+    titresDocuments: []
     // titresSubstances: [],
     // titresTitulaires: [],
     // titresEmprises: [],
@@ -229,6 +230,7 @@ const compare = async domaineId => {
       })
 
     const titreEtapesPoints = etapeIds
+      .filter(etapeId => jorfDemarche[`${etapeId}:titres_etapes.date`])
       .map(etapeId => {
         const sourceTitreEtape = sourceTitreDemarche
           ? sources.titresEtapes.find(
@@ -255,6 +257,16 @@ const compare = async domaineId => {
           : null
       })
       .filter(titreEtapePoints => titreEtapePoints)
+
+    const documentsProps = ['jorf', 'nor', 'url', 'pdf', 'nom', 'type']
+    const titreEtapesDocuments = etapeIds
+      .filter(etapeId => jorfDemarche[`${etapeId}:titres_etapes.date`])
+      .map(etapeId => {
+        const document = documentsProps
+
+        if (jorfDemarche[`${etapeId}:titres_documents.${prop}`]) {
+        }
+      })
 
     if (demarcheIsOctroi(jorfDemarche)) {
       exports.titres.push(titre)
