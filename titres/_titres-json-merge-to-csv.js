@@ -258,15 +258,35 @@ const compare = async domaineId => {
       })
       .filter(titreEtapePoints => titreEtapePoints)
 
-    const documentsProps = ['jorf', 'nor', 'url', 'pdf', 'nom', 'type']
+    const documentsProps = [
+      'jorf',
+      'nor',
+      'url',
+      'uri',
+      'fichier',
+      'nom',
+      'type'
+    ]
     const titreEtapesDocuments = etapeIds
       .filter(etapeId => jorfDemarche[`${etapeId}:titres_etapes.date`])
-      .map(etapeId => {
-        const document = documentsProps
-
-        if (jorfDemarche[`${etapeId}:titres_documents.${prop}`]) {
-        }
-      })
+      .filter(etapeId =>
+        documentsProps.reduce(
+          (res, prop) =>
+            res || jorfDemarche[`${etapeId}:titres_documents.${prop}`],
+          false
+        )
+      )
+      .map(etapeId =>
+        documentsProps.reduce(
+          (res, prop) =>
+            jorfDemarche[`${etapeId}:titres_documents.${prop}`]
+              ? Object.assign(res, {
+                  [prop]: jorfDemarche[`${etapeId}:titres_documents.${prop}`]
+                })
+              : res,
+          { titre_etape_id: `${titreDemarcheId}-${etapeId}` }
+        )
+      )
 
     if (demarcheIsOctroi(jorfDemarche)) {
       exports.titres.push(titre)
@@ -281,6 +301,10 @@ const compare = async domaineId => {
       titreEtapePoints.forEach(titrePoint => {
         exports.titresPoints.push(titrePoint)
       })
+    })
+
+    titreEtapesDocuments.forEach(titreEtapeDocument => {
+      exports.titresDocuments.push(titreEtapeDocument)
     })
   })
 
