@@ -128,7 +128,6 @@ const sourcesLoad = domaineId => ({
 const exportsCreate = (domaineId, jorfDemarches, sources) =>
   jorfDemarches.reduce(
     (exp, jorfDemarche) => {
-      const jorfDomaineId = jorfDemarche['titres.domaine_id']
       const jorfTypeId = jorfDemarche['titres.type_id']
       const jorfDemarcheId = jorfDemarche['titres_demarches.demarche_id']
       const jorfNom = jorfDemarche['titres.nom']
@@ -157,7 +156,7 @@ const exportsCreate = (domaineId, jorfDemarches, sources) =>
         id: titreId,
         nom: jorfNom,
         type_id: jorfTypeId,
-        domaine_id: jorfDomaineId,
+        domaine_id: domaineId,
         statut_id: 'ind',
         references: { DGEC: jorfDemarche['ref_dgec'] }
       }
