@@ -109,215 +109,241 @@ const log = () => {
   // )
 }
 
-const compare = async domaineId => {
-  const jorfDemarches = require(`../sources/titres-${domaineId}-jorf.json`)
+const jorfDemarchesLoad = domaineId =>
+  require(`../sources/titres-${domaineId}-jorf.json`)
 
-  const sources = {
-    titres: require(`../sources/titres-${domaineId}.json`),
-    titresDemarches: require(`../sources/titres-${domaineId}-demarches.json`),
-    titresEtapes: require(`../sources/titres-${domaineId}-etapes.json`),
-    titresSubstances: require(`../sources/titres-${domaineId}-substances.json`),
-    titresTitulaires: require(`../sources/titres-${domaineId}-titulaires.json`),
-    titresEmprises: require(`../sources/titres-${domaineId}-emprises.json`),
-    titresVerifications: require(`../sources/titres-${domaineId}-verifications.json`),
-    titresPoints: require(`../sources/titres-${domaineId}-points.json`),
-    titresAmodiataires: require(`../sources/titres-${domaineId}-amodiataires.json`),
-    titresUtilisateurs: require(`../sources/titres-${domaineId}-utilisateurs.json`)
-  }
+const sourcesLoad = domaineId => ({
+  titres: require(`../sources/titres-${domaineId}.json`),
+  titresDemarches: require(`../sources/titres-${domaineId}-demarches.json`),
+  titresEtapes: require(`../sources/titres-${domaineId}-etapes.json`),
+  titresSubstances: require(`../sources/titres-${domaineId}-substances.json`),
+  titresTitulaires: require(`../sources/titres-${domaineId}-titulaires.json`),
+  titresEmprises: require(`../sources/titres-${domaineId}-emprises.json`),
+  titresVerifications: require(`../sources/titres-${domaineId}-verifications.json`),
+  titresPoints: require(`../sources/titres-${domaineId}-points.json`),
+  titresAmodiataires: require(`../sources/titres-${domaineId}-amodiataires.json`),
+  titresUtilisateurs: require(`../sources/titres-${domaineId}-utilisateurs.json`)
+})
 
-  const exports = {
-    titres: [],
-    titresDemarches: [],
-    titresEtapes: [
-      {
-        id: 'test',
-        titre_demarche_id: 'test',
-        etape_id: 'test',
-        etape_statut_id: 'test',
-        ordre: 'test',
-        date: 'test',
-        duree: 'test',
-        echeance: 'test',
-        surface: 'test',
-        points: 'test',
-        substances: 'test',
-        titulaires: 'test'
+const exportsCreate = (domaineId, jorfDemarches, sources) =>
+  jorfDemarches.reduce(
+    (exp, jorfDemarche) => {
+      const jorfDomaineId = jorfDemarche['titres.domaine_id']
+      const jorfTypeId = jorfDemarche['titres.type_id']
+      const jorfDemarcheId = jorfDemarche['titres_demarches.demarche_id']
+      const jorfNom = jorfDemarche['titres.nom']
+
+      const tOctroi = demarcheIsOctroi(jorfDemarche)
+        ? jorfDemarche
+        : titreDemarcheOctroiFind(jorfDemarche, jorfDemarches)
+
+      const date = tOctroi
+        ? dateFormat(tOctroi['dpu:titres_etapes.date'])
+        : '0000'
+
+      const titreId = slugify(
+        `${domaineId}-${jorfTypeId}-${jorfNom}-${date.slice(0, 4)}`
+      )
+      const titreDemarcheOrder = leftPad(
+        titreDemarcheOrderFind(jorfDemarche, jorfDemarches) + 1,
+        2,
+        '0'
+      )
+      const titreDemarcheId = slugify(
+        `${titreId}-${jorfDemarcheId}-${titreDemarcheOrder}`
+      )
+
+      const titre = {
+        id: titreId,
+        nom: jorfNom,
+        type_id: jorfTypeId,
+        domaine_id: jorfDomaineId,
+        statut_id: 'ind',
+        references: { DGEC: jorfDemarche['ref_dgec'] }
       }
-    ],
-    titresPoints: [],
-    titresDocuments: []
-    // titresSubstances: [],
-    // titresTitulaires: [],
-    // titresEmprises: [],
-    // titresVerifications: [],
-    // titresAmodiataires: [],
-    // titresUtilisateurs: []
-  }
 
-  jorfDemarches.forEach(jorfDemarche => {
-    const titre = {}
-    const titreDemarche = {}
-    const jorfDomaineId = jorfDemarche['titres.domaine_id']
-    const jorfTypeId = jorfDemarche['titres.type_id']
-    const jorfDemarcheId = jorfDemarche['titres_demarches.demarche_id']
-    const jorfNom = jorfDemarche['titres.nom']
+      const titreDemarche = {
+        id: titreDemarcheId,
+        demarche_id: jorfDemarcheId,
+        titre_id: titreId,
+        demarche_statut_id: 'ind',
+        ordre: 0
+      }
 
-    const tOctroi = demarcheIsOctroi(jorfDemarche)
-      ? jorfDemarche
-      : titreDemarcheOctroiFind(jorfDemarche, jorfDemarches)
+      const titreEtapes = titreEtapesCreate(jorfDemarche, titreDemarcheId)
 
-    const date = tOctroi
-      ? dateFormat(tOctroi['dpu:titres_etapes.date'])
-      : '0000'
+      const titreEtapesPoints = titreEtapesPointsCreate(
+        jorfDemarche,
+        titreDemarcheId,
+        sources
+      )
 
-    const dateYear = date.slice(0, 4)
-    const titreId = slugify(`${domaineId}-${jorfTypeId}-${jorfNom}-${dateYear}`)
-    const titreDemarcheOrder = leftPad(
-      titreDemarcheOrderFind(jorfDemarche, jorfDemarches) + 1,
-      2,
-      '0'
-    )
-    const titreDemarcheId = slugify(
-      `${domaineId}-${jorfTypeId}-${jorfNom}-${dateYear}-${jorfDemarcheId}-${titreDemarcheOrder}`
-    )
+      const titreEtapesDocuments = titreEtapesDocumentsCreate(
+        jorfDemarche,
+        titreDemarcheId
+      )
 
-    const etapesSorted = etapesSort(titreDemarcheId, jorfDemarche)
+      // titreEtapes.forEach(titreEtape => {
+      //   const tsvFileName = `exports/etapes/${titreEtape.id}.tsv`
+      //   fileCreate(tsvFileName, '')
+      // })
 
-    const sourceTitre = sources.titres.find(sourceTitre =>
-      titreFind(sourceTitre.references.DGEC, jorfDemarche['ref_dgec'])
-    )
-
-    const sourceTitreDemarche = sourceTitre
-      ? sources.titresDemarches.find(
-          titreDemarche =>
-            titreDemarche.titre_id === sourceTitre.id &&
-            titreDemarche.demarche_id === `${jorfTypeId}-${jorfDemarcheId}`
-        )
-      : null
-
-    titre.id = titreId
-    titre.nom = jorfNom
-    titre.type_id = jorfTypeId
-    titre.domaine_id = jorfDomaineId
-    titre.statut_id = 'ind'
-    titre.references = { DGEC: jorfDemarche['ref_dgec'] }
-    titreDemarche.id = titreDemarcheId
-    titreDemarche.demarche_id = jorfDemarcheId
-    titreDemarche.titre_id = titreId
-    titreDemarche.demarche_statut_id = 'ind'
-    titreDemarche.ordre = 0
-
-    if (!sourceTitre) {
-      logTitresWithNoSource.push(titreId)
-    } else {
-      logTitresWithASource.push(titreId)
+      return {
+        titres: demarcheIsOctroi(jorfDemarche)
+          ? [...exp.titres, titre]
+          : exp.titres,
+        titresDemarches: [...exp.titresDemarches, titreDemarche],
+        titresEtapes: [...exp.titresEtapes, ...titreEtapes],
+        titresPoints: [...exp.titresPoints, ...titreEtapesPoints],
+        titresDocuments: [...exp.titresDocuments, ...titreEtapesDocuments]
+      }
+    },
+    {
+      titres: [],
+      titresDemarches: [],
+      titresEtapes: [
+        {
+          id: '',
+          titre_demarche_id: '',
+          etape_id: '',
+          etape_statut_id: '',
+          ordre: '',
+          date: '',
+          duree: '',
+          echeance: '',
+          surface: '',
+          points: '',
+          substances: '',
+          titulaires: ''
+        }
+      ],
+      titresPoints: [],
+      titresDocuments: []
+      // titresSubstances: [],
+      // titresTitulaires: [],
+      // titresEmprises: [],
+      // titresVerifications: [],
+      // titresAmodiataires: [],
+      // titresUtilisateurs: []
     }
+  )
 
-    const titreEtapes = etapeIds
-      .filter(etapeId => jorfDemarche[`${etapeId}:titres_etapes.date`])
-      .map(etapeId => {
-        const titreEtapeId = `${titreDemarcheId}-${etapeId}`
-        const etape = {
-          id: `${titreDemarcheId}-${etapeId}`,
-          titre_demarche_id: titreDemarcheId,
-          etape_id: etapeId,
-          etape_statut_id:
-            jorfDemarche[`${etapeId}:titres_etapes.etape_statut_id`],
-          ordre: etapesSorted.findIndex(e => e.id === titreEtapeId),
-          date: dateFormat(jorfDemarche[`${etapeId}:titres_etapes.date`])
+const titreEtapesCreate = (jorfDemarche, titreDemarcheId) =>
+  etapeIds
+    .filter(etapeId => jorfDemarche[`${etapeId}:titres_etapes.date`])
+    .map(etapeId => {
+      const titreEtapeId = `${titreDemarcheId}-${etapeId}`
+      const etapesSorted = etapesSort(titreDemarcheId, jorfDemarche)
+      const etape = {
+        id: `${titreDemarcheId}-${etapeId}`,
+        titre_demarche_id: titreDemarcheId,
+        etape_id: etapeId,
+        etape_statut_id:
+          jorfDemarche[`${etapeId}:titres_etapes.etape_statut_id`],
+        ordre: etapesSorted.findIndex(e => e.id === titreEtapeId),
+        date: dateFormat(jorfDemarche[`${etapeId}:titres_etapes.date`])
+      }
+
+      etapeProps.forEach(prop => {
+        if (jorfDemarche[`${etapeId}:titres_etapes.${prop}`]) {
+          etape[prop] = jorfDemarche[`${etapeId}:titres_etapes.${prop}`]
         }
-
-        etapeProps.forEach(prop => {
-          if (jorfDemarche[`${etapeId}:titres_etapes.${prop}`]) {
-            etape[prop] = jorfDemarche[`${etapeId}:titres_etapes.${prop}`]
-          }
-        })
-
-        if (etape.visas) {
-          etape.visas = etape.visas.split(';').map(l => l.replace(/\n/g, ''))
-        }
-
-        if (etape.echeance) {
-          etape.echeance = dateFormat(etape.echeance)
-        }
-
-        if (etape.surface) {
-          etape.surface = etape.surface.replace(/,/g, '.')
-        }
-
-        return etape
       })
 
-    const titreEtapesPoints = etapeIds
-      .filter(etapeId => jorfDemarche[`${etapeId}:titres_etapes.date`])
-      .map(etapeId => {
-        const sourceTitreEtape = sourceTitreDemarche
-          ? sources.titresEtapes.find(
-              titreEtape =>
-                titreEtape.titre_demarche_id === sourceTitreDemarche.id &&
-                titreEtape.etape_id === etapeId
+      if (etape.visas) {
+        etape.visas = etape.visas.split(';').map(l => l.replace(/\n/g, ''))
+      }
+
+      if (etape.echeance) {
+        etape.echeance = dateFormat(etape.echeance)
+      }
+
+      if (etape.surface) {
+        etape.surface = etape.surface.replace(/,/g, '.')
+      }
+
+      return etape
+    })
+
+const titreEtapesPointsCreate = (jorfDemarche, titreDemarcheId, sources) =>
+  etapeIds
+    .filter(etapeId => jorfDemarche[`${etapeId}:titres_etapes.date`])
+    .map(etapeId => {
+      const jorfTypeId = jorfDemarche['titres.type_id']
+      const jorfDemarcheId = jorfDemarche['titres_demarches.demarche_id']
+
+      const sourceTitre = sources.titres.find(sourceTitre =>
+        titreFind(sourceTitre.references.DGEC, jorfDemarche['ref_dgec'])
+      )
+
+      const sourceTitreDemarche = sourceTitre
+        ? sources.titresDemarches.find(
+            titreDemarche =>
+              titreDemarche.titre_id === sourceTitre.id &&
+              titreDemarche.demarche_id === `${jorfTypeId}-${jorfDemarcheId}`
+          )
+        : null
+
+      const sourceTitreEtape = sourceTitreDemarche
+        ? sources.titresEtapes.find(
+            titreEtape =>
+              titreEtape.titre_demarche_id === sourceTitreDemarche.id &&
+              titreEtape.etape_id === etapeId
+          )
+        : null
+
+      return sourceTitreEtape
+        ? sources.titresPoints
+            .filter(
+              titrePoint => titrePoint.titre_etape_id === sourceTitreEtape.id
             )
-          : null
-
-        return sourceTitreEtape
-          ? sources.titresPoints
-              .filter(
-                titrePoint => titrePoint.titre_etape_id === sourceTitreEtape.id
+            .map(titrePoint => {
+              const titreEtapeId = `${titreDemarcheId}-${etapeId}`
+              titrePoint.titre_etape_id = titreEtapeId
+              titrePoint.id = titrePoint.id.replace(
+                sourceTitreEtape.id,
+                titreEtapeId
               )
-              .map(titrePoint => {
-                const titreEtapeId = `${titreDemarcheId}-${etapeId}`
-                titrePoint.titre_etape_id = titreEtapeId
-                titrePoint.id = titrePoint.id.replace(
-                  sourceTitreEtape.id,
-                  titreEtapeId
-                )
-                return titrePoint
+              return titrePoint
+            })
+        : null
+    })
+    .filter(titreEtapePoints => titreEtapePoints)
+    .reduce((points, titreEtapePoints) => [...points, ...titreEtapePoints], [])
+
+const titreEtapesDocumentsCreate = (jorfDemarche, titreDemarcheId) =>
+  etapeIds
+    .filter(etapeId => jorfDemarche[`${etapeId}:titres_etapes.date`])
+    .filter(etapeId =>
+      documentsProps.reduce(
+        (res, prop) =>
+          res || jorfDemarche[`${etapeId}:titres_documents.${prop}`],
+        false
+      )
+    )
+    .map(etapeId =>
+      documentsProps.reduce(
+        (res, prop) =>
+          jorfDemarche[`${etapeId}:titres_documents.${prop}`]
+            ? Object.assign(res, {
+                [prop]: jorfDemarche[`${etapeId}:titres_documents.${prop}`]
               })
-          : null
-      })
-      .filter(titreEtapePoints => titreEtapePoints)
-
-    const titreEtapesDocuments = etapeIds
-      .filter(etapeId => jorfDemarche[`${etapeId}:titres_etapes.date`])
-      .filter(etapeId =>
-        documentsProps.reduce(
-          (res, prop) =>
-            res || jorfDemarche[`${etapeId}:titres_documents.${prop}`],
-          false
-        )
+            : res,
+        { titre_etape_id: `${titreDemarcheId}-${etapeId}` }
       )
-      .map(etapeId =>
-        documentsProps.reduce(
-          (res, prop) =>
-            jorfDemarche[`${etapeId}:titres_documents.${prop}`]
-              ? Object.assign(res, {
-                  [prop]: jorfDemarche[`${etapeId}:titres_documents.${prop}`]
-                })
-              : res,
-          { titre_etape_id: `${titreDemarcheId}-${etapeId}` }
-        )
-      )
-    if (demarcheIsOctroi(jorfDemarche)) {
-      exports.titres.push(titre)
-    }
+    )
 
-    exports.titresDemarches.push(titreDemarche)
-    titreEtapes.forEach(titreEtape => {
-      const tsvFileName = `exports/etapes/${titreEtape.id}.tsv`
-      fileCreate(tsvFileName, '')
-      exports.titresEtapes.push(titreEtape)
-    })
+const csvCreate = (domaineId, exports) => async e => {
+  const json2csvParser = new Json2csvParser()
+  const csvFileName = `exports/${domaineId}-${decamelize(e, '-')}.csv`
+  const csvFileContent = json2csvParser.parse(exports[e])
+  await fileCreate(csvFileName, csvFileContent)
+}
 
-    titreEtapesPoints.forEach(titreEtapePoints => {
-      titreEtapePoints.forEach(titrePoint => {
-        exports.titresPoints.push(titrePoint)
-      })
-    })
-
-    titreEtapesDocuments.forEach(titreEtapeDocument => {
-      exports.titresDocuments.push(titreEtapeDocument)
-    })
-  })
+const compare = async domaineId => {
+  const jorfDemarches = jorfDemarchesLoad(domaineId)
+  const sources = sourcesLoad(domaineId)
+  const exports = exportsCreate(domaineId, jorfDemarches, sources)
 
   // sources.titres.forEach(t => {
   //   const titre = jorfDemarches.find(ti =>
@@ -336,12 +362,7 @@ const compare = async domaineId => {
   // })
 
   await Promise.all([
-    ...Object.keys(exports).map(async e => {
-      const json2csvParser = new Json2csvParser()
-      const csvFileName = `exports/${domaineId}-${decamelize(e, '-')}.csv`
-      const csvFileContent = json2csvParser.parse(exports[e])
-      await fileCreate(csvFileName, csvFileContent)
-    })
+    ...Object.keys(exports).map(csvCreate(domaineId, exports))
   ])
 
   // log()
