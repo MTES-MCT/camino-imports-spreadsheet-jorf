@@ -332,6 +332,23 @@ const titreEtapesDocumentsCreate = (jorfDemarche, titreDemarcheId) =>
       )
     )
 
+const sourcesCompare = (sources, jorfDemarches) =>
+  sources.titres.forEach(t => {
+    const titre = jorfDemarches.find(ti =>
+      titreFind(t.references.DGEC, ti['ref_dgec'])
+    )
+    if (!titre) {
+      console.log(chalk.red.bold(t.nom))
+    } else {
+      const demarche = sources.titresDemarches
+        .filter(d => d.titre_id === t.id)
+        .find(d => titre['titres_demarches.demarche_id'] === d.demarche_id)
+      if (!demarche) {
+        console.log('--> ', t.nom)
+      }
+    }
+  })
+
 const csvCreate = (domaineId, exports) => async e => {
   const json2csvParser = new Json2csvParser()
   const csvFileName = `exports/${domaineId}-${decamelize(e, '-')}.csv`
@@ -339,26 +356,12 @@ const csvCreate = (domaineId, exports) => async e => {
   await fileCreate(csvFileName, csvFileContent)
 }
 
-const compare = async domaineId => {
+const jsonMergeToCsv = async domaineId => {
   const jorfDemarches = jorfDemarchesLoad(domaineId)
   const sources = sourcesLoad(domaineId)
   const exports = exportsCreate(domaineId, jorfDemarches, sources)
 
-  // sources.titres.forEach(t => {
-  //   const titre = jorfDemarches.find(ti =>
-  //     titreFind(t.references.DGEC, ti['ref_dgec'])
-  //   )
-  //   if (!titre) {
-  //     console.log(chalk.red.bold(t.nom))
-  //   } else {
-  //     const demarche = sources.titresDemarches
-  //       .filter(d => d.titre_id === t.id)
-  //       .find(d => titre['titres_demarches.demarche_id'] === d.demarche_id)
-  //     if (!demarche) {
-  //       console.log('--> ', t.nom)
-  //     }
-  //   }
-  // })
+  // sourcesCompare(sources, jorfDemarches)
 
   await Promise.all([
     ...Object.keys(exports).map(csvCreate(domaineId, exports))
@@ -367,4 +370,4 @@ const compare = async domaineId => {
   // log()
 }
 
-module.exports = compare
+module.exports = jsonMergeToCsv
