@@ -3,6 +3,19 @@ const fileCreate = require('../_utils/file-create')
 const Json2csvParser = require('json2csv').Parser
 const decamelize = require('decamelize')
 const slugify = require('@sindresorhus/slugify')
+const leftPad = require('left-pad')
+
+const etapeIds = ['dpu', 'apu', 'dex', 'dim', 'mfr']
+const etapeProps = [
+  'duree',
+  'echeance',
+  'surface',
+  'volume',
+  'engagement',
+  'engagement_devise',
+  'visas'
+]
+const documentsProps = ['jorf', 'nor', 'url', 'uri', 'fichier', 'nom', 'type']
 
 // M/D/YYY vers YYYY-MM-DD
 const dateFormat = input => {
@@ -22,9 +35,7 @@ const dateFormat = input => {
 const dateYearCalc = str => Number(dateFormat(str).slice(0, 4))
 
 const demarcheIsOctroi = titre =>
-  titre['titres_demarches.demarche_id'] === 'prh-oct' ||
-  titre['titres_demarches.demarche_id'] === 'cxx-oct' ||
-  titre['titres_demarches.demarche_id'] === 'pxh-oct'
+  titre['titres_demarches.demarche_id'] === 'oct'
 
 // trouve la démarche d'octroi correspondant à une démarche
 const titreDemarcheOctroiFind = (jorfDemarche, jorfDemarches) =>
@@ -44,17 +55,20 @@ const titreDemarcheOctroiFind = (jorfDemarche, jorfDemarches) =>
 //   jorfDemarche
 // )
 
-const etapeIds = ['dpu', 'apu', 'dex', 'dim', 'mfr']
-const etapeProps = [
-  'duree',
-  'echeance',
-  'surface',
-  'volume',
-  'engagement',
-  'engagement_devise',
-  'visas'
-]
-const documentsProps = ['jorf', 'nor', 'url', 'uri', 'fichier', 'nom', 'type']
+const titreDemarcheOrderFind = (jorfDemarche, jorfDemarches) =>
+  jorfDemarches
+    .filter(
+      d =>
+        d['ref_dgec'] === jorfDemarche['ref_dgec'] &&
+        d['titres_demarches.demarche_id'] ===
+          jorfDemarche['titres_demarches.demarche_id']
+    )
+    .sort(
+      (a, b) =>
+        Number(dateFormat(a['dpu:titres_etapes.date'])) -
+        Number(dateFormat(b['dpu:titres_etapes.date']))
+    )
+    .findIndex(d => jorfDemarche === d)
 
 const etapesSort = (titreDemarcheId, jorfDemarche) =>
   etapeIds
@@ -65,7 +79,7 @@ const etapesSort = (titreDemarcheId, jorfDemarche) =>
     }))
     .sort((a, b) => Number(a.year) - Number(b.year))
 
-const refExists = (refSource, refJorf) => {
+const titreFind = (refSource, refJorf) => {
   const f = refSource.slice(0, 1)
   const ref =
     f === 'D' || f === 'E' || f === 'M' || f === 'N' || f === 'P'
@@ -143,6 +157,10 @@ const compare = async domaineId => {
   jorfDemarches.forEach(jorfDemarche => {
     const titre = {}
     const titreDemarche = {}
+    const jorfDomaineId = jorfDemarche['titres.domaine_id']
+    const jorfTypeId = jorfDemarche['titres.type_id']
+    const jorfDemarcheId = jorfDemarche['titres_demarches.demarche_id']
+    const jorfNom = jorfDemarche['titres.nom']
 
     const tOctroi = demarcheIsOctroi(jorfDemarche)
       ? jorfDemarche
@@ -153,38 +171,38 @@ const compare = async domaineId => {
       : '0000'
 
     const dateYear = date.slice(0, 4)
-    const titreId = slugify(
-      `${domaineId}-${jorfDemarche['titres.type_id']}-${
-        jorfDemarche['titres.nom']
-      }-${dateYear}`
+    const titreId = slugify(`${domaineId}-${jorfTypeId}-${jorfNom}-${dateYear}`)
+    const titreDemarcheOrder = leftPad(
+      titreDemarcheOrderFind(jorfDemarche, jorfDemarches) + 1,
+      2,
+      '0'
     )
-    const demarcheId = jorfDemarche['titres_demarches.demarche_id']
     const titreDemarcheId = slugify(
-      `${domaineId}-${demarcheId}-${jorfDemarche['titres.nom']}-${dateYear}`
+      `${domaineId}-${jorfTypeId}-${jorfNom}-${dateYear}-${jorfDemarcheId}-${titreDemarcheOrder}`
     )
 
     const etapesSorted = etapesSort(titreDemarcheId, jorfDemarche)
 
     const sourceTitre = sources.titres.find(sourceTitre =>
-      refExists(sourceTitre.references.DGEC, jorfDemarche['ref_dgec'])
+      titreFind(sourceTitre.references.DGEC, jorfDemarche['ref_dgec'])
     )
 
     const sourceTitreDemarche = sourceTitre
       ? sources.titresDemarches.find(
           titreDemarche =>
             titreDemarche.titre_id === sourceTitre.id &&
-            titreDemarche.demarche_id === demarcheId
+            titreDemarche.demarche_id === `${jorfTypeId}-${jorfDemarcheId}`
         )
       : null
 
     titre.id = titreId
-    titre.nom = jorfDemarche['titres.nom']
-    titre.type_id = jorfDemarche['titres.type_id']
-    titre.domaine_id = jorfDemarche['titres.domaine_id']
+    titre.nom = jorfNom
+    titre.type_id = jorfTypeId
+    titre.domaine_id = jorfDomaineId
     titre.statut_id = 'ind'
     titre.references = { DGEC: jorfDemarche['ref_dgec'] }
     titreDemarche.id = titreDemarcheId
-    titreDemarche.demarche_id = demarcheId
+    titreDemarche.demarche_id = jorfDemarcheId
     titreDemarche.titre_id = titreId
     titreDemarche.demarche_statut_id = 'ind'
     titreDemarche.ordre = 0
@@ -279,15 +297,14 @@ const compare = async domaineId => {
           { titre_etape_id: `${titreDemarcheId}-${etapeId}` }
         )
       )
-
     if (demarcheIsOctroi(jorfDemarche)) {
       exports.titres.push(titre)
     }
 
     exports.titresDemarches.push(titreDemarche)
     titreEtapes.forEach(titreEtape => {
-      // const dsvFileName = `exports/etapes/${titreEtape.id}.dsv`
-      // fileCreate(dsvFileName, '')
+      const tsvFileName = `exports/etapes/${titreEtape.id}.tsv`
+      fileCreate(tsvFileName, '')
       exports.titresEtapes.push(titreEtape)
     })
 
@@ -304,7 +321,7 @@ const compare = async domaineId => {
 
   // sources.titres.forEach(t => {
   //   const titre = jorfDemarches.find(ti =>
-  //     refExists(t.references.DGEC, ti['ref_dgec'])
+  //     titreFind(t.references.DGEC, ti['ref_dgec'])
   //   )
   //   if (!titre) {
   //     console.log(chalk.red.bold(t.nom))
