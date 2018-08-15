@@ -54,6 +54,7 @@ const etapeProps = [
   'engagement_devise',
   'visas'
 ]
+const documentsProps = ['jorf', 'nor', 'url', 'uri', 'fichier', 'nom', 'type']
 
 const etapesSort = (titreDemarcheId, jorfDemarche) =>
   etapeIds
@@ -258,15 +259,6 @@ const compare = async domaineId => {
       })
       .filter(titreEtapePoints => titreEtapePoints)
 
-    const documentsProps = [
-      'jorf',
-      'nor',
-      'url',
-      'uri',
-      'fichier',
-      'nom',
-      'type'
-    ]
     const titreEtapesDocuments = etapeIds
       .filter(etapeId => jorfDemarche[`${etapeId}:titres_etapes.date`])
       .filter(etapeId =>
@@ -294,6 +286,8 @@ const compare = async domaineId => {
 
     exports.titresDemarches.push(titreDemarche)
     titreEtapes.forEach(titreEtape => {
+      // const dsvFileName = `exports/etapes/${titreEtape.id}.dsv`
+      // fileCreate(dsvFileName, '')
       exports.titresEtapes.push(titreEtape)
     })
 
