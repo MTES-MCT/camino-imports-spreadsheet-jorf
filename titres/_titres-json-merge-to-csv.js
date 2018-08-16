@@ -5,8 +5,14 @@ const decamelize = require('decamelize')
 const slugify = require('@sindresorhus/slugify')
 const leftPad = require('left-pad')
 
+// ---------------------------------------------------------
+// structure
+// ---------------------------------------------------------
+
 const etapeIds = ['dpu', 'apu', 'dex', 'dim', 'mfr']
-const etapeProps = [
+
+// colonnes de la table titres_etapes
+const etapeCols = [
   'duree',
   'echeance',
   'surface',
@@ -15,103 +21,67 @@ const etapeProps = [
   'engagement_devise',
   'visas'
 ]
-const documentsProps = ['jorf', 'nor', 'url', 'uri', 'fichier', 'nom', 'type']
 
-// M/D/YYY vers YYYY-MM-DD
-const dateFormat = input => {
-  const arr = input
-    .split('/')
-    .map(i => i.padStart(2, '0'))
-    .reverse()
+// colonnes de la table titres_documents
+const documentsCols = ['jorf', 'nor', 'url', 'uri', 'fichier', 'nom', 'type']
 
-  const tmp = arr[1]
-  arr[1] = arr[2]
-  arr[2] = tmp
-
-  return arr.join('-')
+// objet qui reçoit le contenu transformé
+// avec la structure de la bdd camino
+// avant d'être exporté en csv
+const dbStructure = {
+  titres: [],
+  titresDemarches: [],
+  titresEtapes: [
+    {
+      id: '',
+      titre_demarche_id: '',
+      etape_id: '',
+      etape_statut_id: '',
+      ordre: '',
+      date: '',
+      duree: '',
+      echeance: '',
+      surface: '',
+      points: '',
+      substances: '',
+      titulaires: ''
+    }
+  ],
+  titresPoints: [],
+  titresDocuments: []
+  // titresSubstances: [],
+  // titresTitulaires: [],
+  // titresEmprises: [],
+  // titresVerifications: [],
+  // titresAmodiataires: [],
+  // titresUtilisateurs: []
 }
 
-// string M/D/YYY vers number YYYY
-const dateYearCalc = str => Number(dateFormat(str).slice(0, 4))
+// ---------------------------------------------------------
+// scripts
+// ---------------------------------------------------------
 
-const demarcheIsOctroi = titre =>
-  titre['titres_demarches.demarche_id'] === 'oct'
+// script principal
+// importe les fichiers sources et jorf au format json
+// les convertis en objet avec la structure de la bdd de camino
+// exporte ces tables au format csv
+const jsonMergeToCsv = async domaineId => {
+  const jorfDemarches = jorfDemarchesLoad(domaineId)
+  const sources = sourcesLoad(domaineId)
+  const json = jsonCreate(domaineId, jorfDemarches, sources)
 
-// trouve la démarche d'octroi correspondant à une démarche
-const titreDemarcheOctroiFind = (jorfDemarche, jorfDemarches) =>
-  // soit la démarche d'octroi avec la même ref existe
-  jorfDemarches.find(
-    d => d['ref_dgec'] === jorfDemarche['ref_dgec'] && demarcheIsOctroi(d)
-  )
-// soit on retourne la plus vieille démarche avec la même ref
-// ||
-// jorfDemarches.reduce(
-//   (demarcheOlder, d) =>
-//     d['ref_dgec'] === jorfDemarche['ref_dgec'] &&
-//     dateYearCalc(demarcheOlder['dpu:titres_etapes.date']) >
-//       dateYearCalc(d['dpu:titres_etapes.date'])
-//       ? d
-//       : demarcheOlder,
-//   jorfDemarche
-// )
+  // sourcesCompare(sources, jorfDemarches)
 
-const titreDemarcheOrderFind = (jorfDemarche, jorfDemarches) =>
-  jorfDemarches
-    .filter(
-      d =>
-        d['ref_dgec'] === jorfDemarche['ref_dgec'] &&
-        d['titres_demarches.demarche_id'] ===
-          jorfDemarche['titres_demarches.demarche_id']
-    )
-    .sort(
-      (a, b) =>
-        Number(dateFormat(a['dpu:titres_etapes.date'])) -
-        Number(dateFormat(b['dpu:titres_etapes.date']))
-    )
-    .findIndex(d => jorfDemarche === d)
+  await Promise.all([...Object.keys(json).map(csvCreate(domaineId, json))])
 
-const etapesSort = (titreDemarcheId, jorfDemarche) =>
-  etapeIds
-    .filter(etapeId => jorfDemarche[`${etapeId}:titres_etapes.date`])
-    .map(etapeId => ({
-      id: `${titreDemarcheId}-${etapeId}`,
-      year: new Date(dateFormat(jorfDemarche[`${etapeId}:titres_etapes.date`]))
-    }))
-    .sort((a, b) => Number(a.year) - Number(b.year))
-
-const titreFind = (refSource, refJorf) => {
-  const f = refSource.slice(0, 1)
-  const ref =
-    f === 'D' || f === 'E' || f === 'M' || f === 'N' || f === 'P'
-      ? refSource.slice(1)
-      : refSource
-
-  return ref === refJorf
+  // log()
 }
 
-const logTitresWithNoSource = []
-const logTitresWithASource = []
-
-const log = () => {
-  // console.log(
-  //   chalk.red.bold(
-  //     `${logTitresWithNoSource
-  //       .filter((elem, pos, arr) => arr.indexOf(elem) === pos)
-  //       .join('\n')}`
-  //   )
-  // )
-  // console.log(
-  //   chalk.green.bold(
-  //     `${logTitresWithASource
-  //       .filter((elem, pos, arr) => arr.indexOf(elem) === pos)
-  //       .join('\n')}`
-  //   )
-  // )
-}
-
+// charge le fichier jorfDemarches depuis un fichier json
 const jorfDemarchesLoad = domaineId =>
   require(`../sources/titres-${domaineId}-jorf.json`)
 
+// charge les fichiers sources depuis des fichiers json
 const sourcesLoad = domaineId => ({
   titres: require(`../sources/titres-${domaineId}.json`),
   titresDemarches: require(`../sources/titres-${domaineId}-demarches.json`),
@@ -125,107 +95,163 @@ const sourcesLoad = domaineId => ({
   titresUtilisateurs: require(`../sources/titres-${domaineId}-utilisateurs.json`)
 })
 
-const exportsCreate = (domaineId, jorfDemarches, sources) =>
+// transforme le fichier jorfDemarches
+// dans le format de la bdd camino (dbStructure)
+// chaque ligne du tableau jorfDemarches représente une démarche
+// une démarche est traitée diffèrement s'il s'agit d'un rectificatif
+const jsonCreate = (domaineId, jorfDemarches, sources) =>
   jorfDemarches.reduce(
-    (exp, jorfDemarche) => {
-      const jorfTypeId = jorfDemarche['titres.type_id']
-      const jorfDemarcheId = jorfDemarche['titres_demarches.demarche_id']
-      const jorfNom = jorfDemarche['titres.nom']
-
-      const tOctroi = demarcheIsOctroi(jorfDemarche)
-        ? jorfDemarche
-        : titreDemarcheOctroiFind(jorfDemarche, jorfDemarches)
-
-      const date = tOctroi
-        ? dateFormat(tOctroi['dpu:titres_etapes.date'])
-        : '0000'
-
-      const titreId = slugify(
-        `${domaineId}-${jorfTypeId}-${jorfNom}-${date.slice(0, 4)}`
-      )
-      const titreDemarcheOrder = leftPad(
-        titreDemarcheOrderFind(jorfDemarche, jorfDemarches) + 1,
-        2,
-        '0'
-      )
-      const titreDemarcheId = slugify(
-        `${titreId}-${jorfDemarcheId}-${titreDemarcheOrder}`
-      )
-
-      const titre = {
-        id: titreId,
-        nom: jorfNom,
-        type_id: jorfTypeId,
-        domaine_id: domaineId,
-        statut_id: 'ind',
-        references: { DGEC: jorfDemarche['ref_dgec'] }
-      }
-
-      const titreDemarche = {
-        id: titreDemarcheId,
-        demarche_id: jorfDemarcheId,
-        titre_id: titreId,
-        demarche_statut_id: 'ind',
-        ordre: 0
-      }
-
-      const titreEtapes = titreEtapesCreate(jorfDemarche, titreDemarcheId)
-
-      const titreEtapesPoints = titreEtapesPointsCreate(
-        jorfDemarche,
-        titreDemarcheId,
-        sources
-      )
-
-      const titreEtapesDocuments = titreEtapesDocumentsCreate(
-        jorfDemarche,
-        titreDemarcheId
-      )
-
-      // titreEtapes.forEach(titreEtape => {
-      //   const tsvFileName = `exports/etapes/${titreEtape.id}.tsv`
-      //   fileCreate(tsvFileName, '')
-      // })
-
-      return {
-        titres: demarcheIsOctroi(jorfDemarche)
-          ? [...exp.titres, titre]
-          : exp.titres,
-        titresDemarches: [...exp.titresDemarches, titreDemarche],
-        titresEtapes: [...exp.titresEtapes, ...titreEtapes],
-        titresPoints: [...exp.titresPoints, ...titreEtapesPoints],
-        titresDocuments: [...exp.titresDocuments, ...titreEtapesDocuments]
-      }
-    },
-    {
-      titres: [],
-      titresDemarches: [],
-      titresEtapes: [
-        {
-          id: '',
-          titre_demarche_id: '',
-          etape_id: '',
-          etape_statut_id: '',
-          ordre: '',
-          date: '',
-          duree: '',
-          echeance: '',
-          surface: '',
-          points: '',
-          substances: '',
-          titulaires: ''
-        }
-      ],
-      titresPoints: [],
-      titresDocuments: []
-      // titresSubstances: [],
-      // titresTitulaires: [],
-      // titresEmprises: [],
-      // titresVerifications: [],
-      // titresAmodiataires: [],
-      // titresUtilisateurs: []
-    }
+    (exp, jorfDemarche) =>
+      !!demarcheRectifDate(jorfDemarche)
+        ? demarcheRectifCreate(
+            domaineId,
+            sources,
+            jorfDemarches,
+            jorfDemarche,
+            exp
+          )
+        : demarcheNormalCreate(
+            domaineId,
+            sources,
+            jorfDemarches,
+            jorfDemarche,
+            exp
+          ),
+    dbStructure
   )
+
+// transformation d'une démarche normale (non rectificatif)
+// renvoi un objet au format dbStructure
+const demarcheNormalCreate = (
+  domaineId,
+  sources,
+  jorfDemarches,
+  jorfDemarche,
+  exp
+) => {
+  const jorfTypeId = jorfDemarche['titres.type_id']
+  const jorfDemarcheId = jorfDemarche['titres_demarches.demarche_id']
+  const jorfNom = jorfDemarche['titres.nom']
+
+  const demarcheOctroi = demarcheIsOctroiTest(jorfDemarche)
+    ? jorfDemarche
+    : demarcheOctroiFind(jorfDemarche, jorfDemarches)
+
+  const date = demarcheOctroi
+    ? dateFormat(demarcheOctroi['dpu:titres_etapes.date'])
+    : '0000'
+
+  const titreId = slugify(
+    `${domaineId}-${jorfTypeId}-${jorfNom}-${date.slice(0, 4)}`
+  )
+  const titreDemarcheOrder = leftPad(
+    demarcheOrderFind(jorfDemarche, jorfDemarches) + 1,
+    2,
+    '0'
+  )
+  const titreDemarcheId = slugify(
+    `${titreId}-${jorfDemarcheId}-${titreDemarcheOrder}`
+  )
+
+  const titre = {
+    id: titreId,
+    nom: jorfNom,
+    type_id: jorfTypeId,
+    domaine_id: domaineId,
+    statut_id: 'ind',
+    references: { DGEC: jorfDemarche['ref_dgec'] }
+  }
+
+  const titreDemarche = {
+    id: titreDemarcheId,
+    demarche_id: jorfDemarcheId,
+    titre_id: titreId,
+    demarche_statut_id: 'ind',
+    ordre: 0
+  }
+
+  const titreEtapes = titreEtapesCreate(jorfDemarche, titreDemarcheId)
+
+  const titreEtapesPoints = titreEtapesPointsCreate(
+    jorfDemarche,
+    titreDemarcheId,
+    sources
+  )
+
+  const titreEtapesDocuments = titreEtapesDocumentsCreate(
+    jorfDemarche,
+    titreDemarcheId
+  )
+
+  // etapesTsvFilesCreate(titreEtapes)
+
+  return {
+    titres: demarcheIsOctroiTest(jorfDemarche)
+      ? [...exp.titres, titre]
+      : exp.titres,
+    titresDemarches: [...exp.titresDemarches, titreDemarche],
+    titresEtapes: [...exp.titresEtapes, ...titreEtapes],
+    titresPoints: [...exp.titresPoints, ...titreEtapesPoints],
+    titresDocuments: [...exp.titresDocuments, ...titreEtapesDocuments]
+  }
+}
+
+// transformation d'une démarche rectificatif
+// renvoi un objet au format dbStructure
+const demarcheRectifCreate = (
+  domaineId,
+  sources,
+  jorfDemarches,
+  jorfDemarche,
+  exp
+) => {
+  const jorfTypeId = jorfDemarche['titres.type_id']
+  const jorfDemarcheId = jorfDemarche['titres_demarches.demarche_id']
+  const jorfNom = jorfDemarche['titres.nom']
+
+  const demarcheOctroi = demarcheIsOctroiTest(jorfDemarche)
+    ? jorfDemarche
+    : demarcheOctroiFind(jorfDemarche, jorfDemarches)
+
+  const date = demarcheOctroi
+    ? dateFormat(demarcheOctroi['dpu:titres_etapes.date'])
+    : '0000'
+
+  const titreId = slugify(
+    `${domaineId}-${jorfTypeId}-${jorfNom}-${date.slice(0, 4)}`
+  )
+  const titreDemarcheOrder = leftPad(
+    demarcheOrderFind(jorfDemarche, jorfDemarches) + 1,
+    2,
+    '0'
+  )
+  const titreDemarcheId = slugify(
+    `${titreId}-${jorfDemarcheId}-${titreDemarcheOrder}`
+  )
+
+  const titreEtapes = titreEtapesCreate(jorfDemarche, titreDemarcheId)
+
+  const titreEtapesPoints = titreEtapesPointsCreate(
+    jorfDemarche,
+    titreDemarcheId,
+    sources
+  )
+
+  const titreEtapesDocuments = titreEtapesDocumentsCreate(
+    jorfDemarche,
+    titreDemarcheId
+  )
+
+  // etapesTsvFilesCreate(titreEtapes)
+
+  return {
+    titres: exp.titres,
+    titresDemarches: exp.titresDemarches,
+    titresEtapes: [...exp.titresEtapes, ...titreEtapes],
+    titresPoints: [...exp.titresPoints, ...titreEtapesPoints],
+    titresDocuments: [...exp.titresDocuments, ...titreEtapesDocuments]
+  }
+}
 
 const titreEtapesCreate = (jorfDemarche, titreDemarcheId) =>
   etapeIds
@@ -243,9 +269,9 @@ const titreEtapesCreate = (jorfDemarche, titreDemarcheId) =>
         date: dateFormat(jorfDemarche[`${etapeId}:titres_etapes.date`])
       }
 
-      etapeProps.forEach(prop => {
-        if (jorfDemarche[`${etapeId}:titres_etapes.${prop}`]) {
-          etape[prop] = jorfDemarche[`${etapeId}:titres_etapes.${prop}`]
+      etapeCols.forEach(col => {
+        if (jorfDemarche[`${etapeId}:titres_etapes.${col}`]) {
+          etape[col] = jorfDemarche[`${etapeId}:titres_etapes.${col}`]
         }
       })
 
@@ -272,7 +298,7 @@ const titreEtapesPointsCreate = (jorfDemarche, titreDemarcheId, sources) =>
       const jorfDemarcheId = jorfDemarche['titres_demarches.demarche_id']
 
       const sourceTitre = sources.titres.find(sourceTitre =>
-        titreFind(sourceTitre.references.DGEC, jorfDemarche['ref_dgec'])
+        titreFindByRef(sourceTitre.references.DGEC, jorfDemarche['ref_dgec'])
       )
 
       const sourceTitreDemarche = sourceTitre
@@ -314,18 +340,17 @@ const titreEtapesDocumentsCreate = (jorfDemarche, titreDemarcheId) =>
   etapeIds
     .filter(etapeId => jorfDemarche[`${etapeId}:titres_etapes.date`])
     .filter(etapeId =>
-      documentsProps.reduce(
-        (res, prop) =>
-          res || jorfDemarche[`${etapeId}:titres_documents.${prop}`],
+      documentsCols.reduce(
+        (res, col) => res || jorfDemarche[`${etapeId}:titres_documents.${col}`],
         false
       )
     )
     .map(etapeId =>
-      documentsProps.reduce(
-        (res, prop) =>
-          jorfDemarche[`${etapeId}:titres_documents.${prop}`]
+      documentsCols.reduce(
+        (res, col) =>
+          jorfDemarche[`${etapeId}:titres_documents.${col}`]
             ? Object.assign(res, {
-                [prop]: jorfDemarche[`${etapeId}:titres_documents.${prop}`]
+                [col]: jorfDemarche[`${etapeId}:titres_documents.${col}`]
               })
             : res,
         { titre_etape_id: `${titreDemarcheId}-${etapeId}` }
@@ -335,7 +360,7 @@ const titreEtapesDocumentsCreate = (jorfDemarche, titreDemarcheId) =>
 const sourcesCompare = (sources, jorfDemarches) =>
   sources.titres.forEach(t => {
     const titre = jorfDemarches.find(ti =>
-      titreFind(t.references.DGEC, ti['ref_dgec'])
+      titreFindByRef(t.references.DGEC, ti['ref_dgec'])
     )
     if (!titre) {
       console.log(chalk.red.bold(t.nom))
@@ -349,25 +374,123 @@ const sourcesCompare = (sources, jorfDemarches) =>
     }
   })
 
-const csvCreate = (domaineId, exports) => async e => {
+const csvCreate = (domaineId, json) => async table => {
   const json2csvParser = new Json2csvParser()
-  const csvFileName = `exports/${domaineId}-${decamelize(e, '-')}.csv`
-  const csvFileContent = json2csvParser.parse(exports[e])
+  const csvFileName = `exports/${domaineId}-${decamelize(table, '-')}.csv`
+  const csvFileContent = json2csvParser.parse(json[table])
   await fileCreate(csvFileName, csvFileContent)
 }
 
-const jsonMergeToCsv = async domaineId => {
-  const jorfDemarches = jorfDemarchesLoad(domaineId)
-  const sources = sourcesLoad(domaineId)
-  const exports = exportsCreate(domaineId, jorfDemarches, sources)
+const etapesTsvFilesCreate = titreEtapes =>
+  titreEtapes.forEach(titreEtape => {
+    const tsvFileName = `demarche/etapes/${titreEtape.id}.tsv`
+    fileCreate(tsvFileName, '')
+  })
 
-  // sourcesCompare(sources, jorfDemarches)
+// ---------------------------------------------------------
+// utils
+// ---------------------------------------------------------
 
-  await Promise.all([
-    ...Object.keys(exports).map(csvCreate(domaineId, exports))
-  ])
+// date M/D/YYY vers YYYY-MM-DD
+const dateFormat = input => {
+  const arr = input
+    .split('/')
+    .map(i => i.padStart(2, '0'))
+    .reverse()
 
-  // log()
+  const tmp = arr[1]
+  arr[1] = arr[2]
+  arr[2] = tmp
+
+  return arr.join('-')
+}
+
+// string M/D/YYY vers number YYYY
+const dateYearCalc = str => Number(dateFormat(str).slice(0, 4))
+
+// renvoi true si la démarche est un octroi
+const demarcheIsOctroiTest = jorfDemarche =>
+  jorfDemarche['titres_demarches.demarche_id'] === 'oct'
+
+// renvoi une date si la démarche est un rectificatif
+const demarcheRectifDate = jorfDemarche =>
+  jorfDemarche['rectif:dex:jorfDemarches_etapes.date'] &&
+  dateFormat(titre['rectif:dex:titres_etapes.date'])
+
+// renvoi la démarche d'octroi correspondant à une démarche
+const demarcheOctroiFind = (jorfDemarche, jorfDemarches) =>
+  // soit la démarche d'octroi avec la même ref existe
+  jorfDemarches.find(
+    d => d['ref_dgec'] === jorfDemarche['ref_dgec'] && demarcheIsOctroiTest(d)
+  )
+// soit on retourne la plus vieille démarche avec la même ref
+// ||
+// jorfDemarches.reduce(
+//   (demarcheOlder, d) =>
+//     d['ref_dgec'] === jorfDemarche['ref_dgec'] &&
+//     dateYearCalc(demarcheOlder['dpu:titres_etapes.date']) >
+//       dateYearCalc(d['dpu:titres_etapes.date'])
+//       ? d
+//       : demarcheOlder,
+//   jorfDemarche
+// )
+
+// renvoi l'index de la démarche
+// parmi les autres démarches avec une id identique classées par date
+const demarcheOrderFind = (jorfDemarche, jorfDemarches) =>
+  jorfDemarches
+    .filter(
+      d =>
+        d['ref_dgec'] === jorfDemarche['ref_dgec'] &&
+        d['titres_demarches.demarche_id'] ===
+          jorfDemarche['titres_demarches.demarche_id']
+    )
+    .sort(
+      (a, b) =>
+        Number(dateFormat(a['dex:titres_etapes.date'])) -
+        Number(dateFormat(b['dex:titres_etapes.date']))
+    )
+    .findIndex(d => jorfDemarche === d)
+
+// renvoi un tableau avec les étapes { id, date } classées par date
+const etapesSort = (titreDemarcheId, jorfDemarche) =>
+  etapeIds
+    .filter(etapeId => jorfDemarche[`${etapeId}:titres_etapes.date`])
+    .map(etapeId => ({
+      id: `${titreDemarcheId}-${etapeId}`,
+      year: new Date(dateFormat(jorfDemarche[`${etapeId}:titres_etapes.date`]))
+    }))
+    .sort((a, b) => Number(a.year) - Number(b.year))
+
+// renvoi true si une réf de titre existe dans les sources et dans jorf
+const titreFindByRef = (sourceTitreRef, jorfTitreRef) => {
+  const f = sourceTitreRef.slice(0, 1)
+  const ref =
+    f === 'D' || f === 'E' || f === 'M' || f === 'N' || f === 'P'
+      ? sourceTitreRef.slice(1)
+      : sourceTitreRef
+
+  return ref === jorfTitreRef
+}
+
+const logTitresWithNoSource = []
+const logTitresWithASource = []
+
+const log = () => {
+  // console.log(
+  //   chalk.red.bold(
+  //     `${logTitresWithNoSource
+  //       .filter((elem, pos, arr) => arr.indexOf(elem) === pos)
+  //       .join('\n')}`
+  //   )
+  // )
+  // console.log(
+  //   chalk.green.bold(
+  //     `${logTitresWithASource
+  //       .filter((elem, pos, arr) => arr.indexOf(elem) === pos)
+  //       .join('\n')}`
+  //   )
+  // )
 }
 
 module.exports = jsonMergeToCsv
