@@ -1,4 +1,8 @@
+const path = require('path')
 const spreadsheetToJson = require('../_utils/spreadsheet-to-json')
+
+const filePathCreate = name =>
+  path.join(__dirname, `../sources/${name.replace(/_/g, '-')}.json`)
 
 const titresCb = json =>
   json.map(j =>
@@ -21,16 +25,20 @@ const tables = [
   { name: '_verifications', cb: null }
 ]
 
-module.exports = async (dbSpreadsheetId, jorfSpreadsheetId, type) => {
+module.exports = async (dbSpreadsheetId, jorfSpreadsheetId, domaineId) => {
   await Promise.all([
-    spreadsheetToJson(jorfSpreadsheetId, `titres_${type}-jorf`, `${type}`),
-    ...tables.map(t =>
-      spreadsheetToJson(
+    spreadsheetToJson(
+      filePathCreate(`titres_${domaineId}-jorf`),
+      jorfSpreadsheetId,
+      `${domaineId}`
+    ),
+    ...tables.map(t => {
+      return spreadsheetToJson(
+        filePathCreate(`titres_${domaineId}${t.name}`),
         dbSpreadsheetId,
-        `titres_${type}${t.name}`,
         `titres${t.name}`,
         t.cb
       )
-    )
+    })
   ])
 }

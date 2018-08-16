@@ -202,7 +202,7 @@ const demarcheNormalCreate = (
     null
   )
 
-  // etapesTsvFilesCreate(titreEtapes)
+  etapesTsvFilesCreate(titreEtapes)
 
   return {
     titres: demarcheIsOctroiTest(jorfDemarche)
@@ -272,7 +272,7 @@ const demarcheRectifCreate = (
     titreDemarcheId
   )
 
-  // etapesTsvFilesCreate(titreEtapes)
+  etapesTsvFilesCreate(titreEtapes)
 
   return {
     titres: exp.titres,
@@ -292,6 +292,7 @@ const titreEtapesCreate = (jorfDemarche, titreDemarcheId, jorfDemarcheParent) =>
         2,
         '0'
       )
+
       const titreEtapeId = `${titreDemarcheId}-${etapeId}${titreEtapeOrder}`
       const etapesSorted = etapesSort(
         titreDemarcheId,
