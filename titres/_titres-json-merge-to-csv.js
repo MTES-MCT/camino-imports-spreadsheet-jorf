@@ -1,3 +1,15 @@
+// ---------------------------------------------------------
+// json merge and convert to csv
+// ---------------------------------------------------------
+
+// importe les fichiers sources et jorf au format json
+// les convertis en objet avec la structure de la bdd de camino
+// exporte ces tables au format csv
+
+// ---------------------------------------------------------
+// dépendances
+// ---------------------------------------------------------
+
 const chalk = require('chalk')
 const fileCreate = require('../_utils/file-create')
 const Json2csvParser = require('json2csv').Parser
@@ -6,7 +18,26 @@ const slugify = require('@sindresorhus/slugify')
 const leftPad = require('left-pad')
 
 // ---------------------------------------------------------
-// structure
+// script principal
+// ---------------------------------------------------------
+
+// importe les fichiers sources et jorf au format json
+// les convertis en objet avec la structure de la bdd de camino
+// exporte ces tables au format csv
+const jsonMergeToCsv = async domaineId => {
+  const jorfDemarches = jorfDemarchesLoad(domaineId)
+  const sources = sourcesLoad(domaineId)
+  const json = jsonCreate(domaineId, jorfDemarches, sources)
+
+  // sourcesCompare(sources, jorfDemarches)
+
+  await Promise.all([...Object.keys(json).map(csvCreate(domaineId, json))])
+
+  // log()
+}
+
+// ---------------------------------------------------------
+// variables de structure
 // ---------------------------------------------------------
 
 const etapeIds = ['dpu', 'apu', 'dex', 'dim', 'mfr']
@@ -60,22 +91,6 @@ const dbStructure = {
 // ---------------------------------------------------------
 // scripts
 // ---------------------------------------------------------
-
-// script principal
-// importe les fichiers sources et jorf au format json
-// les convertis en objet avec la structure de la bdd de camino
-// exporte ces tables au format csv
-const jsonMergeToCsv = async domaineId => {
-  const jorfDemarches = jorfDemarchesLoad(domaineId)
-  const sources = sourcesLoad(domaineId)
-  const json = jsonCreate(domaineId, jorfDemarches, sources)
-
-  // sourcesCompare(sources, jorfDemarches)
-
-  await Promise.all([...Object.keys(json).map(csvCreate(domaineId, json))])
-
-  // log()
-}
 
 // charge le fichier jorfDemarches depuis un fichier json
 const jorfDemarchesLoad = domaineId =>
