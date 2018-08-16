@@ -117,7 +117,7 @@ const sourcesLoad = domaineId => ({
 const jsonCreate = (domaineId, jorfDemarches, sources) =>
   jorfDemarches.reduce(
     (exp, jorfDemarche) =>
-      !!demarcheRectifDate(jorfDemarche)
+      !!jorfDemarche['rectif:dex:titres_etapes.date']
         ? demarcheRectifCreate(
             domaineId,
             sources,
@@ -153,7 +153,7 @@ const demarcheNormalCreate = (
     : demarcheOctroiFind(jorfDemarche, jorfDemarches)
 
   const date = demarcheOctroi
-    ? dateFormat(demarcheOctroi['dpu:titres_etapes.date'])
+    ? demarcheOctroi['dpu:titres_etapes.date']
     : '0000'
 
   const titreId = slugify(
@@ -238,7 +238,7 @@ const demarcheRectifCreate = (
     : demarcheOctroiFind(jorfDemarcheParent, jorfDemarches)
 
   const date = demarcheOctroi
-    ? dateFormat(demarcheOctroi['dpu:titres_etapes.date'])
+    ? demarcheOctroi['dpu:titres_etapes.date']
     : '0000'
 
   const titreId = slugify(
@@ -306,7 +306,7 @@ const titreEtapesCreate = (jorfDemarche, titreDemarcheId, jorfDemarcheParent) =>
         etape_statut_id:
           jorfDemarche[`${etapeId}:titres_etapes.etape_statut_id`],
         ordre: etapesSorted.findIndex(e => e.id === titreEtapeId),
-        date: dateFormat(jorfDemarche[`${etapeId}:titres_etapes.date`])
+        date: jorfDemarche[`${etapeId}:titres_etapes.date`]
       }
 
       etapeCols.forEach(col => {
@@ -314,18 +314,6 @@ const titreEtapesCreate = (jorfDemarche, titreDemarcheId, jorfDemarcheParent) =>
           etape[col] = jorfDemarche[`${etapeId}:titres_etapes.${col}`]
         }
       })
-
-      if (etape.visas) {
-        etape.visas = etape.visas.split(';').map(l => l.replace(/\n/g, ''))
-      }
-
-      if (etape.echeance) {
-        etape.echeance = dateFormat(etape.echeance)
-      }
-
-      if (etape.surface) {
-        etape.surface = etape.surface.replace(/,/g, '.')
-      }
 
       return etape
     })
@@ -449,49 +437,15 @@ const etapesTsvFilesCreate = titreEtapes =>
 // utils
 // ---------------------------------------------------------
 
-// date M/D/YYY vers YYYY-MM-DD
-const dateFormat = input => {
-  const arr = input
-    .split('/')
-    .map(i => i.padStart(2, '0'))
-    .reverse()
-
-  const tmp = arr[1]
-  arr[1] = arr[2]
-  arr[2] = tmp
-
-  return arr.join('-')
-}
-
-// string M/D/YYY vers number YYYY
-const dateYearCalc = str => Number(dateFormat(str).slice(0, 4))
-
 // renvoi true si la démarche est un octroi
 const demarcheIsOctroiTest = jorfDemarche =>
   jorfDemarche['titres_demarches.demarche_id'] === 'oct'
 
-// renvoi une date si la démarche est un rectificatif
-const demarcheRectifDate = jorfDemarche =>
-  jorfDemarche['rectif:dex:titres_etapes.date'] &&
-  dateFormat(jorfDemarche['rectif:dex:titres_etapes.date'])
-
 // renvoi la démarche d'octroi correspondant à une démarche
 const demarcheOctroiFind = (jorfDemarche, jorfDemarches) =>
-  // soit la démarche d'octroi avec la même ref existe
   jorfDemarches.find(
     d => d['ref_dgec'] === jorfDemarche['ref_dgec'] && demarcheIsOctroiTest(d)
   )
-// soit on retourne la plus vieille démarche avec la même ref
-// ||
-// jorfDemarches.reduce(
-//   (demarcheOlder, d) =>
-//     d['ref_dgec'] === jorfDemarche['ref_dgec'] &&
-//     dateYearCalc(demarcheOlder['dpu:titres_etapes.date']) >
-//       dateYearCalc(d['dpu:titres_etapes.date'])
-//       ? d
-//       : demarcheOlder,
-//   jorfDemarche
-// )
 
 // renvoi la démarche parente d'une démarche rectificative
 const demarcheRectifParentFind = (jorfDemarche, jorfDemarches) =>
@@ -515,8 +469,8 @@ const demarcheOrderFind = (jorfDemarche, jorfDemarches) =>
     )
     .sort(
       (a, b) =>
-        Number(dateFormat(a['dex:titres_etapes.date'])) -
-        Number(dateFormat(b['dex:titres_etapes.date']))
+        Number(a['dex:titres_etapes.date']) -
+        Number(b['dex:titres_etapes.date'])
     )
     .findIndex(d => jorfDemarche === d)
 
@@ -535,7 +489,7 @@ const etapesSort = (titreDemarcheId, jorfDemarche, jorfDemarcheParent) =>
         2,
         '0'
       )}`,
-      year: new Date(dateFormat(jorfDemarche[`${etapeId}:titres_etapes.date`]))
+      year: new Date(jorfDemarche[`${etapeId}:titres_etapes.date`])
     }))
     .sort((a, b) => Number(a.year) - Number(b.year))
 
