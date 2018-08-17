@@ -33,7 +33,7 @@ const jsonMergeToCsv = async domaineId => {
 
   await Promise.all([...Object.keys(json).map(csvCreate(domaineId, json))])
 
-  log()
+  // log()
 }
 
 // ---------------------------------------------------------
@@ -82,8 +82,8 @@ const dbStructure = {
   ],
   titresPoints: [],
   titresDocuments: [],
-  titresSubstances: []
-  // titresTitulaires: [],
+  titresSubstances: [],
+  titresTitulaires: []
   // titresEmprises: [],
   // titresVerifications: [],
   // titresAmodiataires: [],
@@ -203,6 +203,12 @@ const demarcheProcess = (
     jorfDemarcheParent
   )
 
+  const titreEtapesTitulaires = titreEtapesTitulairesCreate(
+    jorfDemarche,
+    titreDemarcheId,
+    jorfDemarcheParent
+  )
+
   // etapesTsvFilesCreate(titreEtapes)
 
   return {
@@ -216,7 +222,8 @@ const demarcheProcess = (
     titresEtapes: [...exp.titresEtapes, ...titreEtapes],
     titresPoints: [...exp.titresPoints, ...titreEtapesPoints],
     titresDocuments: [...exp.titresDocuments, ...titreEtapesDocuments],
-    titresSubstances: [...exp.titresSubstances, ...titreEtapesSubstances]
+    titresSubstances: [...exp.titresSubstances, ...titreEtapesSubstances],
+    titresTitulaires: [...exp.titresTitulaires, ...titreEtapesTitulaires]
   }
 }
 
@@ -355,14 +362,50 @@ const titreEtapesSubstancesCreate = (
         jorfDemarche[`${etapeId}:titres_etapes.date`] &&
         jorfDemarche[`${etapeId}:titres_substances.substance_id`]
     )
-    .map(etapeId => ({
-      substance_id: jorfDemarche[`${etapeId}:titres_substances.substance_id`],
-      titre_etape_id: `${titreDemarcheId}-${etapeId}${leftPad(
-        etapeOrderFind(etapeId, jorfDemarcheParent) + 1,
-        2,
-        '0'
-      )}`
-    }))
+    .reduce(
+      (substances, etapeId) => [
+        ...substances,
+        ...jorfDemarche[`${etapeId}:titres_substances.substance_id`]
+          .split(';')
+          .map(substanceId => ({
+            titre_etape_id: `${titreDemarcheId}-${etapeId}${leftPad(
+              etapeOrderFind(etapeId, jorfDemarcheParent) + 1,
+              2,
+              '0'
+            )}`,
+            substance_id: substanceId
+          }))
+      ],
+      []
+    )
+
+const titreEtapesTitulairesCreate = (
+  jorfDemarche,
+  titreDemarcheId,
+  jorfDemarcheParent
+) =>
+  etapeIds
+    .filter(
+      etapeId =>
+        jorfDemarche[`${etapeId}:titres_etapes.date`] &&
+        jorfDemarche[`${etapeId}:titres_titulaires.entreprise_id`]
+    )
+    .reduce(
+      (titulaires, etapeId) => [
+        ...titulaires,
+        ...jorfDemarche[`${etapeId}:titres_titulaires.entreprise_id`]
+          .split(';')
+          .map(titulaireId => ({
+            titre_etape_id: `${titreDemarcheId}-${etapeId}${leftPad(
+              etapeOrderFind(etapeId, jorfDemarcheParent) + 1,
+              2,
+              '0'
+            )}`,
+            entreprise_id: titulaireId
+          }))
+      ],
+      []
+    )
 
 const sourcesCompare = (sources, jorfDemarches) =>
   sources.titres.forEach(t => {
