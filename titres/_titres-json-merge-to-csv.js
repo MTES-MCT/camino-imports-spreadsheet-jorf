@@ -81,8 +81,8 @@ const dbStructure = {
     }
   ],
   titresPoints: [],
-  titresDocuments: []
-  // titresSubstances: [],
+  titresDocuments: [],
+  titresSubstances: []
   // titresTitulaires: [],
   // titresEmprises: [],
   // titresVerifications: [],
@@ -197,6 +197,12 @@ const demarcheProcess = (
     jorfDemarcheParent
   )
 
+  const titreEtapesSubstances = titreEtapesSubstancesCreate(
+    jorfDemarche,
+    titreDemarcheId,
+    jorfDemarcheParent
+  )
+
   // etapesTsvFilesCreate(titreEtapes)
 
   return {
@@ -209,7 +215,8 @@ const demarcheProcess = (
       : exp.titresDemarches,
     titresEtapes: [...exp.titresEtapes, ...titreEtapes],
     titresPoints: [...exp.titresPoints, ...titreEtapesPoints],
-    titresDocuments: [...exp.titresDocuments, ...titreEtapesDocuments]
+    titresDocuments: [...exp.titresDocuments, ...titreEtapesDocuments],
+    titresSubstances: [...exp.titresSubstances, ...titreEtapesSubstances]
   }
 }
 
@@ -336,6 +343,26 @@ const titreEtapesDocumentsCreate = (
         }
       )
     )
+
+const titreEtapesSubstancesCreate = (
+  jorfDemarche,
+  titreDemarcheId,
+  jorfDemarcheParent
+) =>
+  etapeIds
+    .filter(
+      etapeId =>
+        jorfDemarche[`${etapeId}:titres_etapes.date`] &&
+        jorfDemarche[`${etapeId}:titres_substances.substance_id`]
+    )
+    .map(etapeId => ({
+      substance_id: jorfDemarche[`${etapeId}:titres_substances.substance_id`],
+      titre_etape_id: `${titreDemarcheId}-${etapeId}${leftPad(
+        etapeOrderFind(etapeId, jorfDemarcheParent) + 1,
+        2,
+        '0'
+      )}`
+    }))
 
 const sourcesCompare = (sources, jorfDemarches) =>
   sources.titres.forEach(t => {
