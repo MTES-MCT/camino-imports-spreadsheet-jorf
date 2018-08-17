@@ -176,7 +176,7 @@ const demarcheProcess = (
     demarche_id: jorfDemarcheId,
     titre_id: titreId,
     demarche_statut_id: 'ind',
-    ordre: 0
+    ordre: 1
   }
 
   const titreEtapes = titreEtapesCreate(
@@ -248,9 +248,9 @@ const titreEtapesCreate = (jorfDemarche, titreDemarcheId, jorfDemarcheParent) =>
         id: titreEtapeId,
         titre_demarche_id: titreDemarcheId,
         etape_id: etapeId,
+        ordre: etapesSorted.findIndex(e => e.id === titreEtapeId) + 1,
         etape_statut_id:
           jorfDemarche[`${etapeId}:titres_etapes.etape_statut_id`],
-        ordre: etapesSorted.findIndex(e => e.id === titreEtapeId),
         date: jorfDemarche[`${etapeId}:titres_etapes.date`]
       }
 
