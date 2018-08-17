@@ -14,6 +14,7 @@ const chalk = require('chalk')
 const decamelize = require('decamelize')
 const slugify = require('@sindresorhus/slugify')
 const leftPad = require('left-pad')
+const cryptoRandomString = require('crypto-random-string')
 const fileCreate = require('../_utils/file-create')
 const jsonToCsv = require('../_utils/json-to-csv')
 
@@ -333,23 +334,26 @@ const titreEtapesDocumentsCreate = (
         false
       )
     )
-    .map(etapeId =>
-      documentsCols.reduce(
+    .map(etapeId => {
+      const titreEtapeId = `${titreDemarcheId}-${etapeId}${leftPad(
+        etapeOrderFind(etapeId, jorfDemarcheParent) + 1,
+        2,
+        '0'
+      )}`
+
+      return documentsCols.reduce(
         (res, col) =>
           jorfDemarche[`${etapeId}:titres_documents.${col}`]
             ? Object.assign(res, {
+                id: `${titreEtapeId}-${cryptoRandomString(8)}`,
                 [col]: jorfDemarche[`${etapeId}:titres_documents.${col}`]
               })
             : res,
         {
-          titre_etape_id: `${titreDemarcheId}-${etapeId}${leftPad(
-            etapeOrderFind(etapeId, jorfDemarcheParent) + 1,
-            2,
-            '0'
-          )}`
+          titre_etape_id: titreEtapeId
         }
       )
-    )
+    })
 
 const titreEtapesSubstancesCreate = (
   jorfDemarche,
