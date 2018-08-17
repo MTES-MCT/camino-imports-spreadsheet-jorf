@@ -33,12 +33,14 @@ const jsonMergeToCsv = async domaineId => {
 
   await Promise.all([...Object.keys(json).map(csvCreate(domaineId, json))])
 
-  // log()
+  log()
 }
 
 // ---------------------------------------------------------
 // variables de structure
 // ---------------------------------------------------------
+
+const logObject = {}
 
 const etapeIds = ['dpu', 'apu', 'dex', 'dim', 'mfr']
 
@@ -113,31 +115,17 @@ const sourcesLoad = domaineId => ({
 // transforme le fichier jorfDemarches
 // vers le format de la bdd camino (dbStructure)
 // chaque ligne du tableau jorfDemarches représente une démarche
-// une démarche est traitée diffèrement s'il s'agit d'un rectificatif
 const jsonCreate = (domaineId, jorfDemarches, sources) =>
   jorfDemarches.reduce(
     (exp, jorfDemarche) =>
-      !!jorfDemarche['rectif:dex:titres_etapes.date']
-        ? demarcheRectifCreate(
-            domaineId,
-            sources,
-            jorfDemarches,
-            jorfDemarche,
-            exp
-          )
-        : demarcheNormalCreate(
-            domaineId,
-            sources,
-            jorfDemarches,
-            jorfDemarche,
-            exp
-          ),
+      demarcheProcess(domaineId, sources, jorfDemarches, jorfDemarche, exp),
     dbStructure
   )
 
 // transformation d'une démarche normale (non rectificatif)
 // renvoi un objet au format dbStructure
-const demarcheNormalCreate = (
+// une démarche est traitée diffèrement s'il s'agit d'un rectificatif
+const demarcheProcess = (
   domaineId,
   sources,
   jorfDemarches,
@@ -148,22 +136,25 @@ const demarcheNormalCreate = (
   const jorfDemarcheId = jorfDemarche['titres_demarches.demarche_id']
   const jorfNom = jorfDemarche['titres.nom']
 
-  const demarcheOctroi = demarcheIsOctroiTest(jorfDemarche)
-    ? jorfDemarche
-    : demarcheOctroiFind(jorfDemarche, jorfDemarches)
+  // renvoi le parent si la démarche est un rectificatif
+  const jorfDemarcheParent = jorfDemarche['rectif:dex:titres_etapes.date']
+    ? demarcheParentFind(jorfDemarche, jorfDemarches)
+    : null
 
-  const date = demarcheOctroi
-    ? demarcheOctroi['dpu:titres_etapes.date']
-    : '0000'
-
-  const titreId = slugify(
-    `${domaineId}-${jorfTypeId}-${jorfNom}-${date.slice(0, 4)}`
-  )
+  const demarcheOctroiDate = jorfDemarcheParent
+    ? demarcheOctroiDateFind(jorfDemarcheParent, jorfDemarches)
+    : demarcheOctroiDateFind(jorfDemarche, jorfDemarches)
 
   const titreDemarcheOrder = leftPad(
-    demarcheOrderFind(jorfDemarche, jorfDemarches) + 1,
+    (jorfDemarcheParent
+      ? demarcheOrderFind(jorfDemarcheParent, jorfDemarches)
+      : demarcheOrderFind(jorfDemarche, jorfDemarches)) + 1,
     2,
     '0'
+  )
+
+  const titreId = slugify(
+    `${domaineId}-${jorfTypeId}-${jorfNom}-${demarcheOctroiDate.slice(0, 4)}`
   )
 
   const titreDemarcheId = slugify(
@@ -187,74 +178,6 @@ const demarcheNormalCreate = (
     ordre: 0
   }
 
-  const titreEtapes = titreEtapesCreate(jorfDemarche, titreDemarcheId, null)
-
-  const titreEtapesPoints = titreEtapesPointsCreate(
-    jorfDemarche,
-    titreDemarcheId,
-    sources,
-    null
-  )
-
-  const titreEtapesDocuments = titreEtapesDocumentsCreate(
-    jorfDemarche,
-    titreDemarcheId,
-    null
-  )
-
-  etapesTsvFilesCreate(titreEtapes)
-
-  return {
-    titres: demarcheIsOctroiTest(jorfDemarche)
-      ? [...exp.titres, titre]
-      : exp.titres,
-    titresDemarches: [...exp.titresDemarches, titreDemarche],
-    titresEtapes: [...exp.titresEtapes, ...titreEtapes],
-    titresPoints: [...exp.titresPoints, ...titreEtapesPoints],
-    titresDocuments: [...exp.titresDocuments, ...titreEtapesDocuments]
-  }
-}
-
-// transformation d'une démarche rectificatif
-// renvoi un objet au format dbStructure
-const demarcheRectifCreate = (
-  domaineId,
-  sources,
-  jorfDemarches,
-  jorfDemarche,
-  exp
-) => {
-  const jorfTypeId = jorfDemarche['titres.type_id']
-  const jorfDemarcheId = jorfDemarche['titres_demarches.demarche_id']
-  const jorfNom = jorfDemarche['titres.nom']
-
-  const jorfDemarcheParent = demarcheRectifParentFind(
-    jorfDemarche,
-    jorfDemarches
-  )
-
-  const demarcheOctroi = demarcheIsOctroiTest(jorfDemarcheParent)
-    ? jorfDemarcheParent
-    : demarcheOctroiFind(jorfDemarcheParent, jorfDemarches)
-
-  const date = demarcheOctroi
-    ? demarcheOctroi['dpu:titres_etapes.date']
-    : '0000'
-
-  const titreId = slugify(
-    `${domaineId}-${jorfTypeId}-${jorfNom}-${date.slice(0, 4)}`
-  )
-
-  const titreDemarcheOrder = leftPad(
-    demarcheOrderFind(jorfDemarcheParent, jorfDemarches) + 1,
-    2,
-    '0'
-  )
-
-  const titreDemarcheId = slugify(
-    `${titreId}-${jorfDemarcheId}${titreDemarcheOrder}`
-  )
-
   const titreEtapes = titreEtapesCreate(
     jorfDemarche,
     titreDemarcheId,
@@ -264,19 +187,26 @@ const demarcheRectifCreate = (
   const titreEtapesPoints = titreEtapesPointsCreate(
     jorfDemarche,
     titreDemarcheId,
-    sources
+    sources,
+    jorfDemarcheParent
   )
 
   const titreEtapesDocuments = titreEtapesDocumentsCreate(
     jorfDemarche,
-    titreDemarcheId
+    titreDemarcheId,
+    jorfDemarcheParent
   )
 
-  etapesTsvFilesCreate(titreEtapes)
+  // etapesTsvFilesCreate(titreEtapes)
 
   return {
-    titres: exp.titres,
-    titresDemarches: exp.titresDemarches,
+    titres:
+      demarcheIsOctroiTest(jorfDemarche) && !jorfDemarcheParent
+        ? [...exp.titres, titre]
+        : exp.titres,
+    titresDemarches: !jorfDemarcheParent
+      ? [...exp.titresDemarches, titreDemarche]
+      : exp.titresDemarches,
     titresEtapes: [...exp.titresEtapes, ...titreEtapes],
     titresPoints: [...exp.titresPoints, ...titreEtapesPoints],
     titresDocuments: [...exp.titresDocuments, ...titreEtapesDocuments]
@@ -340,36 +270,38 @@ const titreEtapesPointsCreate = (
         titreFindByRef(sourceTitre.references.DGEC, jorfDemarche['ref_dgec'])
       )
 
-      const sourceTitreDemarche = sourceTitre
+      if (sourceTitre) logObject[sourceTitre.id] = true
+
+      const sourceDemarche = sourceTitre
         ? sources.titresDemarches.find(
-            titreDemarche =>
-              titreDemarche.titre_id === sourceTitre.id &&
-              titreDemarche.demarche_id === `${jorfTypeId}-${jorfDemarcheId}`
+            std =>
+              std.titre_id === sourceTitre.id &&
+              std.demarche_id === `${jorfTypeId}-${jorfDemarcheId}`
           )
         : null
 
-      const sourceTitreEtape = sourceTitreDemarche
+      const sourceEtape = sourceDemarche
         ? sources.titresEtapes.find(
-            titreEtape =>
-              titreEtape.titre_demarche_id === sourceTitreDemarche.id &&
-              titreEtape.etape_id === etapeId
+            ste =>
+              ste.titre_demarche_id === sourceDemarche.id &&
+              ste.etape_id === etapeId
           )
         : null
 
-      return sourceTitreEtape
+      const sourcePoints = sourceEtape
         ? sources.titresPoints
-            .filter(
-              titrePoint => titrePoint.titre_etape_id === sourceTitreEtape.id
-            )
-            .map(titrePoint => {
-              titrePoint.titre_etape_id = titreEtapeId
-              titrePoint.id = titrePoint.id.replace(
-                sourceTitreEtape.id,
-                titreEtapeId
-              )
-              return titrePoint
+            .filter(stp => stp.titre_etape_id === sourceEtape.id)
+            .map(stp => {
+              stp.titre_etape_id = titreEtapeId
+              stp.id = stp.id.replace(sourceEtape.id, titreEtapeId)
+              return stp
             })
         : null
+
+      // if (sourcePoints)
+      //   sourcePoints.forEach(sourcePoint => (logObject[sourcePoint.id] = true))
+
+      return sourcePoints
     })
     .filter(titreEtapePoints => titreEtapePoints)
     .reduce((points, titreEtapePoints) => [...points, ...titreEtapePoints], [])
@@ -442,13 +374,19 @@ const demarcheIsOctroiTest = jorfDemarche =>
   jorfDemarche['titres_demarches.demarche_id'] === 'oct'
 
 // renvoi la démarche d'octroi correspondant à une démarche
-const demarcheOctroiFind = (jorfDemarche, jorfDemarches) =>
-  jorfDemarches.find(
-    d => d['ref_dgec'] === jorfDemarche['ref_dgec'] && demarcheIsOctroiTest(d)
-  )
+const demarcheOctroiDateFind = (jorfDemarche, jorfDemarches) => {
+  const demarcheOctroi = demarcheIsOctroiTest(jorfDemarche)
+    ? jorfDemarche
+    : jorfDemarches.find(
+        d =>
+          d['ref_dgec'] === jorfDemarche['ref_dgec'] && demarcheIsOctroiTest(d)
+      )
+
+  return demarcheOctroi ? demarcheOctroi['dpu:titres_etapes.date'] : '0000'
+}
 
 // renvoi la démarche parente d'une démarche rectificative
-const demarcheRectifParentFind = (jorfDemarche, jorfDemarches) =>
+const demarcheParentFind = (jorfDemarche, jorfDemarches) =>
   jorfDemarches.find(
     d =>
       d['ref_dgec'] === jorfDemarche['ref_dgec'] &&
@@ -504,24 +442,8 @@ const titreFindByRef = (sourceTitreRef, jorfTitreRef) => {
   return ref === jorfTitreRef
 }
 
-const logTitresWithNoSource = []
-const logTitresWithASource = []
-
 const log = () => {
-  // console.log(
-  //   chalk.red.bold(
-  //     `${logTitresWithNoSource
-  //       .filter((elem, pos, arr) => arr.indexOf(elem) === pos)
-  //       .join('\n')}`
-  //   )
-  // )
-  // console.log(
-  //   chalk.green.bold(
-  //     `${logTitresWithASource
-  //       .filter((elem, pos, arr) => arr.indexOf(elem) === pos)
-  //       .join('\n')}`
-  //   )
-  // )
+  console.log(Object.keys(logObject).length)
 }
 
 module.exports = jsonMergeToCsv
