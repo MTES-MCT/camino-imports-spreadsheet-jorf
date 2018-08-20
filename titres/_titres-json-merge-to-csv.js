@@ -146,6 +146,10 @@ const demarcheProcess = (
     ? demarcheOctroiDateFind(jorfDemarcheParent, jorfDemarches)
     : demarcheOctroiDateFind(jorfDemarche, jorfDemarches)
 
+  const octroiFake =
+    demarcheOctroiDate.slice(5) === '00-00' &&
+    jorfDemarche['titres_demarches.demarche_id'] === 'oct'
+
   const titreDemarcheOrder = leftPad(
     (jorfDemarcheParent
       ? demarcheOrderFind(jorfDemarcheParent, jorfDemarches)
@@ -212,20 +216,23 @@ const demarcheProcess = (
 
   // etapesTsvFilesCreate(titreEtapes)
 
-  return {
-    titres:
-      demarcheIsOctroiTest(jorfDemarche) && !jorfDemarcheParent
-        ? [...exp.titres, titre]
-        : exp.titres,
-    titresDemarches: !jorfDemarcheParent
+  exp.titres =
+    demarcheIsOctroiTest(jorfDemarche) && !jorfDemarcheParent
+      ? [...exp.titres, titre]
+      : exp.titres
+
+  if (!octroiFake) {
+    exp.titresDemarches = !jorfDemarcheParent
       ? [...exp.titresDemarches, titreDemarche]
-      : exp.titresDemarches,
-    titresEtapes: [...exp.titresEtapes, ...titreEtapes],
-    titresPoints: [...exp.titresPoints, ...titreEtapesPoints],
-    titresDocuments: [...exp.titresDocuments, ...titreEtapesDocuments],
-    titresSubstances: [...exp.titresSubstances, ...titreEtapesSubstances],
-    titresTitulaires: [...exp.titresTitulaires, ...titreEtapesTitulaires]
+      : exp.titresDemarches
+    exp.titresEtapes = [...exp.titresEtapes, ...titreEtapes]
+    exp.titresPoints = [...exp.titresPoints, ...titreEtapesPoints]
+    exp.titresDocuments = [...exp.titresDocuments, ...titreEtapesDocuments]
+    exp.titresSubstances = [...exp.titresSubstances, ...titreEtapesSubstances]
+    exp.titresTitulaires = [...exp.titresTitulaires, ...titreEtapesTitulaires]
   }
+
+  return exp
 }
 
 const titreEtapesCreate = (jorfDemarche, titreDemarcheId, jorfDemarcheParent) =>
@@ -456,7 +463,7 @@ const demarcheOctroiDateFind = (jorfDemarche, jorfDemarches) => {
           d['ref_dgec'] === jorfDemarche['ref_dgec'] && demarcheIsOctroiTest(d)
       )
 
-  return demarcheOctroi ? demarcheOctroi['dpu:titres_etapes.date'] : '0000'
+  return demarcheOctroi ? demarcheOctroi['dpu:titres_etapes.date'] : '1111'
 }
 
 // renvoi la démarche parente d'une démarche rectificative
