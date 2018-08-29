@@ -25,20 +25,18 @@ const tables = [
   { name: '_verifications', cb: null }
 ]
 
-module.exports = async (dbSpreadsheetId, jorfSpreadsheetId, domaineId) => {
-  await Promise.all([
+module.exports = async (dbSpreadsheetId, jorfSpreadsheetId, domaineId) => Promise.all([
     spreadsheetToJson(
       filePathCreate(`titres_${domaineId}-jorf`),
       jorfSpreadsheetId,
       `${domaineId}`
     ),
-    ...tables.map(t => {
-      return spreadsheetToJson(
+    ...tables.map(t =>
+      spreadsheetToJson(
         filePathCreate(`titres_${domaineId}${t.name}`),
         dbSpreadsheetId,
         `titres${t.name}`,
         t.cb
       )
-    })
+    )
   ])
-}
