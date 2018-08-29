@@ -472,6 +472,8 @@ const demarcheParentFind = (jorfDemarche, jorfDemarches) =>
     d =>
       d['ref_dgec'] === jorfDemarche['ref_dgec'] &&
       !d['rectif:dex:titres_etapes.date'] &&
+      d['titres_demarches.demarche_id'] ===
+        jorfDemarche['titres_demarches.demarche_id'] &&
       d['dex:titres_etapes.date'] ===
         jorfDemarche['rectif:dex:titres_etapes.date']
   )
