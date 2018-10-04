@@ -146,6 +146,8 @@ const demarcheProcess = (
     ? demarcheOctroiDateFind(jorfDemarcheParent, jorfDemarches)
     : demarcheOctroiDateFind(jorfDemarche, jorfDemarches)
 
+  console.log(demarcheOctroiDate)
+
   const octroiFake =
     demarcheOctroiDate.slice(5) === '00-00' &&
     jorfDemarche['titres_demarches.demarche_id'] === 'oct'

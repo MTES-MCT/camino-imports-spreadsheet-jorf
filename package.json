@@ -4,11 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "titres-h": "node ./titres/h-run.js",
-    "titres-h-w": "onchange '**/*.js' -i -- npm run titres-h",
+    "data-transform": "node ./titres/run.js",
+    "data-transform-w": "onchange '**/*.js' -i -- npm run titres-h",
     "titres-h-jorf": "node ./titres/h-jorf-run.js",
     "titres-h-jorf-w": "onchange '**/*.js' -i -- npm run titres-h-jorf",
-    "build": "npm run titres-h"
+    "build": "npm run data-transform"
   },
   "author": "",
   "license": "ISC",
