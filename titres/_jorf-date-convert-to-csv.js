@@ -34,7 +34,7 @@ const jorfDateConvert = async domaineId => {
         'titres.type_id': '',
         'titres.nom': '',
         ref_dgec: '',
-        'titres_demarches.demarche_id': '',
+        'titres_demarches.type_id': '',
         'rectif:dex:titres_etapes.date': '',
         'dpu:titres_etapes.date': '',
         'apu:titres_etapes.date': '',
