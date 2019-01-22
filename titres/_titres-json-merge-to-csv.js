@@ -28,6 +28,7 @@ const jsonToCsv = require('../_utils/json-to-csv')
 const jsonMergeToCsv = async domaineId => {
   const jorfDemarches = jorfDemarchesLoad(domaineId)
   const sources = sourcesLoad(domaineId)
+
   const json = jsonCreate(domaineId, jorfDemarches, sources)
 
   // sourcesCompare(sources, jorfDemarches)
@@ -43,12 +44,12 @@ const jsonMergeToCsv = async domaineId => {
 
 const logObject = {}
 
-const typeIds = ['dpu', 'apu', 'dex', 'dim', 'mfr']
+const typeIds = ['dex', 'apu', 'dpu', 'dim', 'mfr']
 
 // colonnes de la table titres_etapes
 const etapeCols = [
   'duree',
-  'echeance',
+  'date_debut',
   'surface',
   'volume',
   'engagement',
@@ -57,7 +58,7 @@ const etapeCols = [
 ]
 
 // colonnes de la table titres_documents
-const documentsCols = ['jorf', 'nor', 'url', 'uri', 'fichier', 'nom', 'type']
+const documentsCols = ['jorf', 'nor', 'url', 'uri', 'nom', 'type', 'fichier']
 
 // objet qui reçoit le contenu transformé
 // avec la structure de la bdd camino
@@ -70,11 +71,12 @@ const dbStructure = {
       id: '',
       titre_demarche_id: '',
       type_id: '',
-      etape_statut_id: '',
+      statut_id: '',
       ordre: '',
       date: '',
       duree: '',
-      echeance: '',
+      date_debut: '',
+      date_fin: '',
       surface: '',
       points: '',
       substances: '',
@@ -84,10 +86,10 @@ const dbStructure = {
   titresPoints: [],
   titresDocuments: [],
   titresSubstances: [],
-  titresTitulaires: []
+  titresTitulaires: [],
   // titresEmprises: [],
   // titresVerifications: [],
-  // titresAmodiataires: [],
+  titresAmodiataires: [],
   // titresUtilisateurs: []
 }
 
@@ -142,11 +144,16 @@ const demarcheProcess = (
     ? demarcheParentFind(jorfDemarche, jorfDemarches)
     : null
 
-  const demarcheOctroiDate = jorfDemarcheParent
+  let demarcheOctroiDate = jorfDemarcheParent
     ? demarcheOctroiDateFind(jorfDemarcheParent, jorfDemarches)
     : demarcheOctroiDateFind(jorfDemarche, jorfDemarches)
 
-  // console.log(demarcheOctroiDate)
+  if (!demarcheOctroiDate) {
+    // console.log({ jorfDemarche, jorfDemarcheParent })
+    demarcheOctroiDate = '0000-00-00'
+  }
+
+  // console.log({ demarcheOctroiDate })
 
   const octroiFake =
     demarcheOctroiDate.slice(5) === '00-00' &&
@@ -174,14 +181,19 @@ const demarcheProcess = (
     type_id: jorfTypeId,
     domaine_id: domaineId,
     statut_id: 'ind',
-    references: { DGEC: jorfDemarche['ref_dgec'] }
+    references: {
+      RNTM: jorfDemarche['ref_rntm'],
+      BRGM: jorfDemarche['ref_brgm'],
+      DEB: jorfDemarche['ref_deb'],
+      DEAL: jorfDemarche['ref_deal973'],
+    },
   }
 
   const titreDemarche = {
     id: titreDemarcheId,
     type_id: jorfDemarcheId,
     titre_id: titreId,
-    demarche_statut_id: 'ind',
+    statut_id: 'ind',
     ordre: 1
   }
 
@@ -239,7 +251,15 @@ const demarcheProcess = (
 
 const titreEtapesCreate = (jorfDemarche, titreDemarcheId, jorfDemarcheParent) =>
   typeIds
-    .filter(typeId => jorfDemarche[`${typeId}:titres_etapes.date`])
+    .filter(typeId => {
+      let date = jorfDemarche[`${typeId}:titres_etapes.date`]
+      if (!date && typeId === 'dpu') {
+        date = jorfDemarche[`dex:titres_etapes.date`]
+        jorfDemarche[`dpu:titres_etapes.date`] = date
+        jorfDemarche[`dpu:titres_etapes.statut_id`] = jorfDemarche[`dex:titres_etapes.statut_id`]
+      }
+      return date
+    })
     .map(typeId => {
       const titreEtapeOrder = leftPad(
         etapeOrderFind(typeId, jorfDemarcheParent) + 1,
@@ -258,9 +278,10 @@ const titreEtapesCreate = (jorfDemarche, titreDemarcheId, jorfDemarcheParent) =>
         titre_demarche_id: titreDemarcheId,
         type_id: typeId,
         ordre: etapesSorted.findIndex(e => e.id === titreEtapeId) + 1,
-        etape_statut_id:
-          jorfDemarche[`${typeId}:titres_etapes.etape_statut_id`],
-        date: jorfDemarche[`${typeId}:titres_etapes.date`]
+        statut_id:
+          jorfDemarche[`${typeId}:titres_etapes.statut_id`],
+        date: jorfDemarche[`${typeId}:titres_etapes.date`],
+        date_fin: jorfDemarche[`${typeId}:titres_etapes.echeance`]
       }
 
       etapeCols.forEach(col => {
@@ -300,7 +321,7 @@ const titreEtapesPointsCreate = (
         ? sources.titresDemarches.find(
             std =>
               std.titre_id === sourceTitre.id &&
-              std.type_id === `${jorfTypeId}-${jorfDemarcheId}`
+              std.type_id === jorfDemarcheId
           )
         : null
 
@@ -315,15 +336,17 @@ const titreEtapesPointsCreate = (
       const sourcePoints = sourceEtape
         ? sources.titresPoints
             .filter(stp => stp.titre_etape_id === sourceEtape.id)
-            .map(stp => {
-              stp.titre_etape_id = titreEtapeId
-              stp.id = stp.id.replace(sourceEtape.id, titreEtapeId)
-              return stp
+              .map(stp => {
+                return {
+                  ...stp,
+                  titre_etape_id: titreEtapeId,
+                  id: stp.id.replace(sourceEtape.id, titreEtapeId)
+                }
             })
         : null
 
-      // if (sourcePoints)
-      //   sourcePoints.forEach(sourcePoint => (logObject[sourcePoint.id] = true))
+      //if (sourcePoints)
+        // sourcePoints.forEach(sourcePoint => (logObject[sourcePoint.id] = true))
 
       return sourcePoints
     })
@@ -379,6 +402,7 @@ const titreEtapesSubstancesCreate = (
       (substances, typeId) => [
         ...substances,
         ...jorfDemarche[`${typeId}:titres_substances.substance_id`]
+          .replace(/ ;/g, ';')
           .split(';')
           .map(substanceId => ({
             titre_etape_id: `${titreDemarcheId}-${typeId}${leftPad(
@@ -386,7 +410,7 @@ const titreEtapesSubstancesCreate = (
               2,
               '0'
             )}`,
-            substance_id: substanceId
+            substance_id: substanceId.trim()
           }))
       ],
       []
@@ -518,6 +542,10 @@ const etapesSort = (titreDemarcheId, jorfDemarche, jorfDemarcheParent) =>
 
 // renvoi true si une réf de titre existe dans les sources et dans jorf
 const titreFindByRef = (sourceTitreRef, jorfTitreRef) => {
+  if (!sourceTitreRef) {
+    return false
+  }
+
   const f = sourceTitreRef.slice(0, 1)
   const ref =
     f === 'D' || f === 'E' || f === 'M' || f === 'N' || f === 'P'
