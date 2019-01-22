@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "data-transform": "node ./titres/run.js",
-    "data-transform-w": "onchange '**/*.js' -i -- npm run titres-h",
+    "data-transform-w": "onchange '**/*.js' -i -- npm run data-transform",
     "titres-h-jorf": "node ./titres/h-jorf-run.js",
     "titres-h-jorf-w": "onchange '**/*.js' -i -- npm run titres-h-jorf",
     "build": "npm run data-transform"

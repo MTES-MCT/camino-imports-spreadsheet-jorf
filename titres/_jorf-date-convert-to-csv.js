@@ -19,7 +19,13 @@ const jorfDateConvert = async domaineId => {
       (demarcheNew, col) => {
         const colNew = {}
         if (dateFields.find(field => field === col)) {
-          colNew[col] = dateFormat(demarche[col])
+          try {
+            colNew[col] = dateFormat(demarche[col])
+          } catch (e) {
+            console.log(demarche, col, demarche[col])
+            console.error(e)
+            throw e
+          }
         } else if (col === 'dex:titres_etapes.visas') {
           colNew[col] = demarche[col].split(';').map(l => l.replace(/\n/g, ''))
         } else if (col === 'dex:titres_etapes.surface') {

@@ -1,3 +1,5 @@
+const chalk = require('chalk');
+
 const titresSpreadsheetToJsonAndMergeToCsv = require('./_titres-spreadsheet-tojson-and-merge-to-csv')
 const domaines = [
   {
