@@ -31,11 +31,7 @@ const jsonMergeToCsv = async domaineId => {
 
   const json = jsonCreate(domaineId, jorfDemarches, sources)
 
-  // sourcesCompare(sources, jorfDemarches)
-
   await Promise.all([...Object.keys(json).map(csvCreate(domaineId, json))])
-
-  // log()
 }
 
 // ---------------------------------------------------------
@@ -109,10 +105,10 @@ const sourcesLoad = domaineId => ({
   titresSubstances: require(`../sources/titres-${domaineId}-substances.json`),
   titresTitulaires: require(`../sources/titres-${domaineId}-titulaires.json`),
   titresEmprises: require(`../sources/titres-${domaineId}-emprises.json`),
-  titresVerifications: require(`../sources/titres-${domaineId}-verifications.json`),
+//  titresVerifications: require(`../sources/titres-${domaineId}-verifications.json`),
   titresPoints: require(`../sources/titres-${domaineId}-points.json`),
   titresAmodiataires: require(`../sources/titres-${domaineId}-amodiataires.json`),
-  titresUtilisateurs: require(`../sources/titres-${domaineId}-utilisateurs.json`)
+//  titresUtilisateurs: require(`../sources/titres-${domaineId}-utilisateurs.json`)
 })
 
 // transforme le fichier jorfDemarches
@@ -182,6 +178,7 @@ const demarcheProcess = (
     domaine_id: domaineId,
     statut_id: 'ind',
     references: {
+      DGEC: jorfDemarcheId['ref_dgec'],
       RNTM: jorfDemarche['ref_rntm'],
       BRGM: jorfDemarche['ref_brgm'],
       DEB: jorfDemarche['ref_deb'],
@@ -228,10 +225,17 @@ const demarcheProcess = (
     jorfDemarcheParent
   )
 
+  const titreEtapesAmodiataires = titreEtapesAmodiatairesCreate(
+    jorfDemarche,
+    titreDemarcheId,
+    jorfDemarcheParent
+  )
+
   // etapesTsvFilesCreate(titreEtapes)
 
   exp.titres =
-    demarcheIsOctroiTest(jorfDemarche) && !jorfDemarcheParent
+    demarcheIsOctroiTest(jorfDemarche) &&
+    !jorfDemarcheParent
       ? [...exp.titres, titre]
       : exp.titres
 
@@ -244,6 +248,7 @@ const demarcheProcess = (
     exp.titresDocuments = [...exp.titresDocuments, ...titreEtapesDocuments]
     exp.titresSubstances = [...exp.titresSubstances, ...titreEtapesSubstances]
     exp.titresTitulaires = [...exp.titresTitulaires, ...titreEtapesTitulaires]
+    exp.titresAmodiataires = [...exp.titresAmodiataires, ...titreEtapesAmodiataires]
   }
 
   return exp
@@ -311,9 +316,14 @@ const titreEtapesPointsCreate = (
       )
       const titreEtapeId = `${titreDemarcheId}-${typeId}${titreEtapeOrder}`
 
-      const sourceTitre = sources.titres.find(sourceTitre =>
-        titreFindByRef(sourceTitre.references.DGEC, jorfDemarche['ref_dgec'])
-      )
+      const ref = Object.keys(jorfDemarche).find(k => k.match(/^ref_/) && jorfDemarche[k])
+      if (!ref) return null;
+
+      const sourceTitre = sources.titres.find(sourceTitre => {
+        const refs = sourceTitre.references
+        if (!refs) return false
+        return Object.keys(refs).find(k => titreFindByRef(refs[k], jorfDemarche[`ref_${k.toLowerCase()}`]))
+      })
 
       if (sourceTitre) logObject[sourceTitre.id] = true
 
@@ -444,25 +454,37 @@ const titreEtapesTitulairesCreate = (
       []
     )
 
-const sourcesCompare = (sources, jorfDemarches) =>
-  sources.titres.forEach(t => {
-    const titre = jorfDemarches.find(ti =>
-      titreFindByRef(t.references.DGEC, ti['ref_dgec'])
+const titreEtapesAmodiatairesCreate = (
+  jorfDemarche,
+  titreDemarcheId,
+  jorfDemarcheParent
+) =>
+  typeIds
+    .filter(
+      typeId =>
+        jorfDemarche[`${typeId}:titres_etapes.date`] &&
+        jorfDemarche[`${typeId}:titres_amodiataires.entreprise_id`]
     )
-    if (!titre) {
-      console.log(chalk.red.bold(t.nom))
-    } else {
-      const demarche = sources.titresDemarches
-        .filter(d => d.titre_id === t.id)
-        .find(d => titre['titres_demarches.type_id'] === d.type_id)
-      if (!demarche) {
-        console.log('--> ', t.nom)
-      }
-    }
-  })
+    .reduce(
+      (titulaires, typeId) => [
+        ...titulaires,
+        ...jorfDemarche[`${typeId}:titres_amodiataires.entreprise_id`]
+          .split(';')
+          .map(amodiataireId => ({
+            titre_etape_id: `${titreDemarcheId}-${typeId}${leftPad(
+              etapeOrderFind(typeId, jorfDemarcheParent) + 1,
+              2,
+              '0'
+            )}`,
+            entreprise_id: amodiataireId
+          }))
+      ],
+      []
+    )
 
 const csvCreate = (domaineId, json) => async table => {
   const fileName = `exports/${domaineId}-${decamelize(table, '-')}.csv`
+  if (!json[table]) console.log(json[table])
   await jsonToCsv(fileName, json[table])
 }
 
@@ -486,17 +508,22 @@ const demarcheOctroiDateFind = (jorfDemarche, jorfDemarches) => {
     ? jorfDemarche
     : jorfDemarches.find(
         d =>
-          d['ref_dgec'] === jorfDemarche['ref_dgec'] && demarcheIsOctroiTest(d)
+        Object.keys(d).find(k => k.match(/^ref_/) && d[k] && d[k] === jorfDemarche[k])
+          && demarcheIsOctroiTest(d)
       )
 
-  return demarcheOctroi ? demarcheOctroi['dpu:titres_etapes.date'] : '1111'
+  const date = demarcheOctroi
+    ? demarcheOctroi['dpu:titres_etapes.date'] || demarcheOctroi['dex:titres_etapes.date']
+    : '0000'
+
+  return date
 }
 
 // renvoi la démarche parente d'une démarche rectificative
 const demarcheParentFind = (jorfDemarche, jorfDemarches) =>
   jorfDemarches.find(
     d =>
-      d['ref_dgec'] === jorfDemarche['ref_dgec'] &&
+      Object.keys(d).find(k => k.match(/^ref_/) && d[k] && d[k] === jorfDemarche[k]) &&
       !d['rectif:dex:titres_etapes.date'] &&
       d['titres_demarches.type_id'] ===
         jorfDemarche['titres_demarches.type_id'] &&
@@ -506,11 +533,11 @@ const demarcheParentFind = (jorfDemarche, jorfDemarches) =>
 
 // renvoi l'index de la démarche
 // parmi les autres démarches avec une id identique classées par date
-const demarcheOrderFind = (jorfDemarche, jorfDemarches) =>
-  jorfDemarches
+const demarcheOrderFind = (jorfDemarche, jorfDemarches) => {
+  const order = jorfDemarches
     .filter(
       d =>
-        d['ref_dgec'] === jorfDemarche['ref_dgec'] &&
+        Object.keys(d).find(k => k.match(/^ref_/) && d[k] && d[k] === jorfDemarche[k]) &&
         d['titres_demarches.type_id'] ===
           jorfDemarche['titres_demarches.type_id']
     )
@@ -520,6 +547,9 @@ const demarcheOrderFind = (jorfDemarche, jorfDemarches) =>
         Number(b['dex:titres_etapes.date'])
     )
     .findIndex(d => jorfDemarche === d)
+
+  return order === -1 ? 0 : order
+}
 
 const etapeOrderFind = (typeId, jorfDemarcheParent) =>
   jorfDemarcheParent && jorfDemarcheParent[`${typeId}:titres_etapes.date`]
